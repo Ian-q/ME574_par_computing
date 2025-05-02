@@ -52,6 +52,13 @@ def timed_serial(x):
 	
 	return(duration, y)
 
+	time_start = time()
+	y = np.array([s(x_i) for x_i in x])
+	time_stop = time()
+	duration = (time_stop - time_start) * 1000  # time in ms
+	
+	return(duration, y)
+
 
 @cuda.jit('void(f8[:], f8[:])')
 def mono_kernel(d_out, d_x):
