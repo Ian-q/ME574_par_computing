@@ -330,10 +330,12 @@ def sh_ode_kernel(d_out, d_s, d_stencil, h_squared): # Added h_squared parameter
 
 	# Load halo elements
 	if tx < RAD:
+		# Load left halo
 		left_idx = idx - RAD
+		# Load right halo
 		right_idx = idx + TPB
-		sh_s[tx] = d_s[left_idx] if left_idx >= 0 else 0.0
-		sh_s[tx + TPB + RAD] = d_s[right_idx] if right_idx < n else 0.0
+		sh_s[tx] = d_s[left_idx] if left_idx >= 0 else 0.0 # Load left halo element for this thread's corresponding position
+		sh_s[tx + TPB + RAD] = d_s[right_idx] if right_idx < n else 0.0 # Load right halo element
 
 	# Synchronize threads to ensure all shared memory is loaded
 	cuda.syncthreads()
