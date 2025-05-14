@@ -151,13 +151,7 @@ def p1():
 
 @cuda.reduce
 def sum_reduce(a,b):
-	# This is a device reduction function for summing values in parallel on the GPU.
-	# You will use this to sum up the panel contributions for Simpson's rule.
-	#
-	# The function should simply return the sum of its two arguments:
-	# return a + b
-	#
-	# (No need for a loop or anything else, just a single return statement.)
+	# note: make sure it uses GPU arrays becuase gpu code
 	return a + b
 
 @cuda.jit
