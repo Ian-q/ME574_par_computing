@@ -150,8 +150,8 @@ def p1():
 #================= START PROBLEM 2 =========================
 
 @cuda.reduce
-def sum_reduce(a,b):
-	# note: make sure it uses GPU arrays becuase gpu code
+def sum_reduce(a, b):
+	# Device reduction for summing elements
 	return a + b
 
 @cuda.jit
@@ -159,7 +159,7 @@ def simpson_kernel(d_contribs, d_v, h):
 	# Each thread computes one Simpson's rule panel contribution.
 	i = cuda.grid(1)
 	n = d_v.size
- 
+
 	# There are (n-1)//2 panels for n points (n odd)
 	if i < (n - 1) // 2:
 		vi = 2 * i + 1  # odd index, panel center
@@ -175,13 +175,28 @@ def par_simpson(v, h):
 	Return:
 		Float quadrature estimate
 	'''
-	# Guidance for implementing par_simpson:
-	# 1. Allocate device arrays for the input values and the panel contributions.
-	# 2. Launch simpson_kernel to compute the panel contributions in parallel.
-	#    - Each thread computes one panel's contribution.
-	# 3. Use sum_reduce to sum the panel contributions in parallel on the device.
-	# 4. Copy the result back to the host and return it as the integral estimate.
-	pass
+	# Ensure the input size is odd (required for Simpson's rule)
+	n = v.size
+	if n % 2 == 0:
+		raise ValueError("Simpson's rule requires an odd number of points.")
+
+	# Number of panels
+	num_panels = (n - 1) // 2
+
+	# Allocate device arrays
+	d_v = cuda.to_device(v)
+	d_contribs = cuda.device_array(num_panels, dtype=np.float64)
+
+	# Launch kernel: one thread per panel
+	threads_per_block = 128
+	blocks_per_grid = (num_panels + threads_per_block - 1) // threads_per_block
+	simpson_kernel[blocks_per_grid, threads_per_block](d_contribs, d_v, h)
+
+	# Use device reduction to sum the panel contributions
+	integral = sum_reduce(d_contribs)
+
+	# Copy result to host and return
+	return float(integral)
 
 
 def p2():
