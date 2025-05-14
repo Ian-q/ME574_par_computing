@@ -32,8 +32,22 @@ def vdp_rk2_step(x0:float, y0:float, eps:float, h:float):
 	Returns: 
 		x, y: float updated coordinates
 	'''
-	# INSERT CODE HERE
-	pass
+ 
+	# slope now
+	k1x, k1y = f(x0, y0, eps)
+	
+	# estimated state 1/2 timestep forward
+	x_mid = x0 + (h/2)*k1x
+	y_mid = y0 + (h/2)*k1y
+ 
+	# slope at estimated 1/2 timestep forward
+	k2x, k2y = f(x_mid, y_mid, eps)
+	
+	# extrapolate state 1 timestep forward using 1/2 timestep	
+	x = x0 + h*k2x
+	y = y0 + h*k2y
+ 
+	return (x, y)
 
 @cuda.jit(device=True)
 def rk2_dist(x0:float, y0:float, eps:float, steps:int, h:float):
@@ -47,12 +61,93 @@ def rk2_dist(x0:float, y0:float, eps:float, steps:int, h:float):
 	Returns:
 		Float final distance from origin of phase plane: sqrt(x*x+y*y)
 	'''
-	# INSERT CODE HERE
+	# This function simulates the van der Pol system for a given number of steps
+	# starting from an initial condition (x0, y0).
+	# It uses the vdp_rk2_step function to advance the solution at each time step.
+	# After all steps are completed, it calculates the Euclidean distance
+	# of the final state (x, y) from the origin (0,0).
+	#
+	# The process is as follows:
+	# 1. Initialize the current state (x, y) to the initial state (x0, y0).
+	#    x = x0
+	#    y = y0
+	#
+	# 2. Loop for the given number of `steps`:
+	#    a. Update the state (x, y) by calling `vdp_rk2_step(x, y, eps, h)`.
+	#       x, y = vdp_rk2_step(x, y, eps, h)
+	#
+	# 3. After the loop, calculate the distance of the final state (x, y) from the origin.
+	#    distance = sqrt(x*x + y*y)
+	#
+	# 4. Return the calculated distance.
+
+	# Initialize x and y with x0 and y0
+	# x = ...
+	# y = ...
+
+	# Loop `steps` times:
+	#   Update x and y using vdp_rk2_step
+	#   x, y = vdp_rk2_step(...)
+
+	# Calculate the final distance from the origin
+	# final_dist = sqrt(...)
+
+	# return final_dist
 	pass
 
 @cuda.jit
 def dist_kernel(d_out, d_x, d_y, eps, steps, h):
-	# INSERT CODE HERE
+	# This is a CUDA kernel designed to be launched on a 2D grid of threads.
+	# Each thread will compute the final distance from the origin for one
+	# specific initial condition (x0, y0) taken from the input arrays d_x and d_y.
+	#
+	# The steps for each thread are:
+	# 1. Determine the unique 2D index (ix, iy) for the current thread.
+	#    This can be done using `cuda.grid(2)`.
+	#    ix, iy = cuda.grid(2)
+	#
+	# 2. Check if the thread's index (ix, iy) is within the bounds of the output array `d_out`.
+	#    If it's out of bounds, the thread should do nothing and return.
+	#    nx = d_out.shape[0]
+	#    ny = d_out.shape[1]
+	#    if ix >= nx or iy >= ny:
+	#        return
+	#
+	# 3. Get the initial condition (x0, y0) for this thread from the input device arrays `d_x` and `d_y`.
+	#    Note: `d_x` is a 1D array of x-coordinates and `d_y` is a 1D array of y-coordinates.
+	#    The kernel is launched with a 2D grid, so `d_out[ix, iy]` will store the result
+	#    for the initial condition `(d_x[ix], d_y[iy])`.
+	#    x0 = d_x[ix]
+	#    y0 = d_y[iy]
+	#
+	# 4. Call the `rk2_dist` device function to compute the final distance from the origin
+	#    for this initial condition (x0, y0), using the provided `eps`, `steps`, and `h`.
+	#    final_distance = rk2_dist(x0, y0, eps, steps, h)
+	#
+	# 5. Store the computed `final_distance` into the output device array `d_out`
+	#    at the corresponding position (ix, iy).
+	#    d_out[ix, iy] = final_distance
+
+	# Get thread indices
+	# ix, iy = ...
+
+	# Get array dimensions from d_out
+	# num_x = d_out.shape[0]
+	# num_y = d_out.shape[1]
+
+	# Boundary check for threads
+	# if ix >= num_x or iy >= num_y:
+	#     return
+
+	# Get initial x0 and y0 from d_x and d_y using thread indices
+	# x_initial = d_x[ix]
+	# y_initial = d_y[iy]
+
+	# Call rk2_dist to get the final distance
+	# distance_result = rk2_dist(x_initial, y_initial, eps, steps, h)
+
+	# Store the result in d_out
+	# d_out[ix, iy] = distance_result
 	pass
 
 def dist(x , y, eps, steps, h):
@@ -113,12 +208,28 @@ def p1():
 
 @cuda.reduce
 def sum_reduce(a,b):
-	# INSERT CODE HERE
+	# This is a device reduction function for summing values in parallel on the GPU.
+	# You will use this to sum up the panel contributions for Simpson's rule.
+	#
+	# The function should simply return the sum of its two arguments:
+	# return a + b
+	#
+	# (No need for a loop or anything else, just a single return statement.)
 	pass
 
 @cuda.jit
 def simpson_kernel(d_contribs, d_v):
-	# INSERT CODE HERE
+	# This kernel computes the panel contributions for Simpson's rule in parallel.
+	# Each thread should compute the contribution for one panel (i.e., for one odd index in d_v).
+	#
+	# Pseudocode:
+	# 1. Get the thread index (i) using cuda.grid(1)
+	# 2. Check if i is within the valid range for panels (i.e., i should be odd and not at the boundaries)
+	#    - Panels are centered at odd indices: i = 1, 3, 5, ..., n-2
+	#    - You may want to launch n//2 threads and map each thread to an odd index
+	# 3. For each valid i, compute the panel contribution using:
+	#    contrib = (h/3) * (d_v[i-1] + 4*d_v[i] + d_v[i+1])
+	# 4. Store the result in d_contribs at the appropriate index
 	pass
 
 def par_simpson(v, h):
@@ -130,7 +241,12 @@ def par_simpson(v, h):
 	Return:
 		Float quadrature estimate
 	'''
-	# INSERT CODE HERE
+	# Guidance for implementing par_simpson:
+	# 1. Allocate device arrays for the input values and the panel contributions.
+	# 2. Launch simpson_kernel to compute the panel contributions in parallel.
+	#    - Each thread computes one panel's contribution.
+	# 3. Use sum_reduce to sum the panel contributions in parallel on the device.
+	# 4. Copy the result back to the host and return it as the integral estimate.
 	pass
 
 
@@ -168,12 +284,23 @@ def update(u, iter_count):
         updateKernel[gridDims, blockDims](d_u, d_v)
     return d_u.copy_to_host()
 
-# INSERT KERNEL CODE HERE
-
 def jacobi_red_black(u, iter_count):
-	# INSERT CODE HERE (INCLUDING KERNEL CALL)
+	# This function should implement the Jacobi iteration using red-black ordering.
+	# The goal is to solve the Laplace equation on a 2D grid, updating the solution in-place.
+	#
+	# Guidance for implementation:
+	# 1. Allocate device arrays for the solution grid.
+	# 2. Launch a CUDA kernel that performs the red-black update:
+	#    - In the red-black scheme, grid points are colored like a checkerboard.
+	#    - In one sweep, update all "red" points using the current values of their neighbors.
+	#    - In the next sweep, update all "black" points using the updated values of their neighbors.
+	#    - This allows for parallel updates without race conditions.
+	# 3. Alternate between red and black updates for the specified number of iterations.
+	# 4. Copy the result back to the host and return it.
+	#
+	# You will need to write a CUDA kernel that takes the grid and a flag (red or black) and updates only the appropriate points.
+	# You may also want to write a device function to help with the update logic.
 	pass
-
 
 def p3():
 	NX, NY = 101, 101
@@ -203,14 +330,3 @@ def p3():
         colors = 'r', linewidths = 4)
 	plt.axis([0,1,0,1])
 	plt.show()
-
-
-#================ main =======================================
-def main():
-	p1()
-	p2()
-	p3()
-
-if __name__ == '__main__':
-	main()
-	
