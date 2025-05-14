@@ -120,14 +120,14 @@ def p1():
 	steps = 5000
 	h = 0.01
 	# Run a single simulation to check that RK2 code is working properly
-	x = 2.1
-	y = 0.2
-	vals = np.zeros(steps)
-	for i in range(steps):
-		vals[i] = x
-		x, y = vdp_rk2_step(x, y, EPS, h)
-	plt.plot(vals)
-	plt.show()
+	# x = 2.1
+	# y = 0.2
+	# vals = np.zeros(steps)
+	# for i in range(steps):
+	# 	vals[i] = x
+	# 	x, y = vdp_rk2_step(x, y, EPS, h)
+	# plt.plot(vals)
+	# plt.show()
 	x = np.linspace(-RX,RX,NX)
 	y = np.linspace(-RY,RY,NY)
 	d0 = dist(x,y,EPS,steps,h)
