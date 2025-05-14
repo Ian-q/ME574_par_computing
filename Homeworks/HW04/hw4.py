@@ -121,14 +121,14 @@ def p1():
 	steps = 5000
 	h = 0.01
 	# Run a single simulation to check that RK2 code is working properly
-	# x = 2.1
-	# y = 0.2
-	# vals = np.zeros(steps)
-	# for i in range(steps):
-	# 	vals[i] = x
-	# 	x, y = vdp_rk2_step(x, y, EPS, h)
-	# plt.plot(vals)
-	# plt.show()
+	x = 2.1
+	y = 0.2
+	vals = np.zeros(steps)
+	for i in range(steps):
+		vals[i] = x
+		x, y = vdp_rk2_step(x, y, EPS, h)
+	plt.plot(vals)
+	plt.show()
 	x = np.linspace(-RX,RX,NX)
 	y = np.linspace(-RY,RY,NY)
 	d0 = dist(x,y,EPS,steps,h)
@@ -158,7 +158,7 @@ def sum_reduce(a,b):
 	# return a + b
 	#
 	# (No need for a loop or anything else, just a single return statement.)
-	pass
+	return a + b
 
 @cuda.jit
 def simpson_kernel(d_contribs, d_v):
@@ -273,3 +273,14 @@ def p3():
         colors = 'r', linewidths = 4)
 	plt.axis([0,1,0,1])
 	plt.show()
+
+
+
+
+
+def main():
+	p1()
+	p2()
+
+if __name__ == '__main__':
+	main()
