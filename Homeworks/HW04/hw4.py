@@ -233,23 +233,65 @@ def update(u, iter_count):
         updateKernel[gridDims, blockDims](d_u, d_v)
     return d_u.copy_to_host()
 
+@cuda.jit("void(f8[:,:], int32)")
+def red_black_update_kernel(data_array, color_to_update):
+    """
+    CUDA kernel for red-black Jacobi update.
+    Updates points of a specific color in-place.
+    color_to_update: 0 for red points ((i+j)%2 == 0), 1 for black points ((i+j)%2 == 1).
+    """
+    i, j = cuda.grid(2)
+    num_rows, num_cols = data_array.shape
+
+    # Check if the thread is within the writable interior of the array
+    if i > 0 and i < num_rows - 1 and j > 0 and j < num_cols - 1:
+        # Determine the "color" of the current point (i, j)
+        # (i + j) % 2 == 0 can be considered "red" (matches color_to_update = 0)
+        # (i + j) % 2 == 1 can be considered "black" (matches color_to_update = 1)
+        point_color = (i + j) % 2
+        
+        # If the point's color matches the color we're currently updating
+        if point_color == color_to_update:
+            data_array[i, j] = (data_array[i - 1, j] + data_array[i + 1, j] +
+                                data_array[i, j - 1] + data_array[i, j + 1]) / 4.0
+
 def jacobi_red_black(u, iter_count):
-	# This function should implement the Jacobi iteration using red-black ordering.
-	# The goal is to solve the Laplace equation on a 2D grid, updating the solution in-place.
-	#
-	# Guidance for implementation:
-	# 1. Allocate device arrays for the solution grid.
-	# 2. Launch a CUDA kernel that performs the red-black update:
-	#    - In the red-black scheme, grid points are colored like a checkerboard.
-	#    - In one sweep, update all "red" points using the current values of their neighbors.
-	#    - In the next sweep, update all "black" points using the updated values of their neighbors.
-	#    - This allows for parallel updates without race conditions.
-	# 3. Alternate between red and black updates for the specified number of iterations.
-	# 4. Copy the result back to the host and return it.
-	#
-	# You will need to write a CUDA kernel that takes the grid and a flag (red or black) and updates only the appropriate points.
-	# You may also want to write a device function to help with the update logic.
-	pass
+    # This function should implement the Jacobi iteration using red-black ordering.
+    # The goal is to solve the Laplace equation on a 2D grid, updating the solution in-place.
+    #
+    # Guidance for implementation:
+    # 1. Allocate device arrays for the solution grid.
+    # 2. Launch a CUDA kernel that performs the red-black update:
+    #    - In the red-black scheme, grid points are colored like a checkerboard.
+    #    - In one sweep, update all "red" points using the current values of their neighbors.
+    #    - In the next sweep, update all "black" points using the updated values of their neighbors.
+    #    - This allows for parallel updates without race conditions.
+    # 3. Alternate between red and black updates for the specified number of iterations.
+    # 4. Copy the result back to the host and return it.
+    #
+    # You will need to write a CUDA kernel that takes the grid and a flag (red or black) and updates only the appropriate points.
+    # You may also want to write a device function to help with the update logic.
+    
+    d_u = cuda.to_device(u) # 1. Allocate device array (copying initial u)
+    
+    rows, cols = u.shape
+    
+    # Configure kernel launch parameters using the global TPB
+    # If p3 requires TPB=8, the global TPB should be set to 8 before this call,
+    # or this function's signature/implementation needs to be adapted.
+    block_dim = (TPB, TPB) 
+    grid_dim = ((rows + TPB - 1) // TPB, (cols + TPB - 1) // TPB)
+
+    # 3. Alternate between red and black updates
+    for _ in range(iter_count):
+        # Update "red" points (color_to_update = 0)
+        red_black_update_kernel[grid_dim, block_dim](d_u, 0)
+        
+        # Update "black" points (color_to_update = 1)
+        red_black_update_kernel[grid_dim, block_dim](d_u, 1)
+        
+    u_updated = d_u.copy_to_host() # 4. Copy the result back to the host
+    return u_updated
 
 def p3():
 	NX, NY = 101, 101
@@ -286,7 +328,8 @@ def p3():
 
 def main():
 	# p1()
-	p2()
+	# p2()
+	p3()
 
 if __name__ == '__main__':
 	main()
