@@ -73,57 +73,24 @@ def rk2_dist(x0:float, y0:float, eps:float, steps:int, h:float):
 
 @cuda.jit
 def dist_kernel(d_out, d_x, d_y, eps, steps, h):
-	# This is a CUDA kernel designed to be launched on a 2D grid of threads.
-	# Each thread will compute the final distance from the origin for one
-	# specific initial condition (x0, y0) taken from the input arrays d_x and d_y.
-	#
-	# The steps for each thread are:
-	# 1. Determine the unique 2D index (ix, iy) for the current thread.
-	#    This can be done using `cuda.grid(2)`.
-	#    ix, iy = cuda.grid(2)
-	#
-	# 2. Check if the thread's index (ix, iy) is within the bounds of the output array `d_out`.
-	#    If it's out of bounds, the thread should do nothing and return.
-	#    nx = d_out.shape[0]
-	#    ny = d_out.shape[1]
-	#    if ix >= nx or iy >= ny:
-	#        return
-	#
-	# 3. Get the initial condition (x0, y0) for this thread from the input device arrays `d_x` and `d_y`.
-	#    Note: `d_x` is a 1D array of x-coordinates and `d_y` is a 1D array of y-coordinates.
-	#    The kernel is launched with a 2D grid, so `d_out[ix, iy]` will store the result
-	#    for the initial condition `(d_x[ix], d_y[iy])`.
-	#    x0 = d_x[ix]
-	#    y0 = d_y[iy]
-	#
-	# 4. Call the `rk2_dist` device function to compute the final distance from the origin
-	#    for this initial condition (x0, y0), using the provided `eps`, `steps`, and `h`.
-	#    final_distance = rk2_dist(x0, y0, eps, steps, h)
-	#
-	# 5. Store the computed `final_distance` into the output device array `d_out`
-	#    at the corresponding position (ix, iy).
-	#    d_out[ix, iy] = final_distance
+	# get thread index
+	ix, iy = cuda.grid(2)
+ 
+	# check that thread is within bounds
+	nx = d_out.shape[0]
+	ny = d_out.shape[1]
+	if (ix > nx) or (iy > ny):
+		return
 
-	# Get thread indices
-	# ix, iy = ...
-
-	# Get array dimensions from d_out
-	# num_x = d_out.shape[0]
-	# num_y = d_out.shape[1]
-
-	# Boundary check for threads
-	# if ix >= num_x or iy >= num_y:
-	#     return
-
-	# Get initial x0 and y0 from d_x and d_y using thread indices
-	# x_initial = d_x[ix]
-	# y_initial = d_y[iy]
-
-	# Call rk2_dist to get the final distance
-	# distance_result = rk2_dist(x_initial, y_initial, eps, steps, h)
-
-	# Store the result in d_out
-	# d_out[ix, iy] = distance_result
+	# from the thread indeces, get initial x and y values
+	x_initial = d_x[ix]
+	y_initial = d_x[iy]
+ 
+	# get distance
+	distance = rk2_dist(x_initial, y_initial, eps, steps, h)
+	
+	# store output
+	d_out[ix, iy] = distance
 	pass
 
 def dist(x , y, eps, steps, h):
