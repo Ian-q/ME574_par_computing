@@ -151,7 +151,8 @@ def p1():
 
 @cuda.reduce
 def sum_reduce(a, b):
-	# Device reduction for summing elements
+	# Device reduction for summing elements,
+	# note: make sure to use gpu arrays because gpu
 	return a + b
 
 @cuda.jit
@@ -195,13 +196,12 @@ def par_simpson(v, h):
 	# Use device reduction to sum the panel contributions
 	integral = sum_reduce(d_contribs)
 
-	# Copy result to host and return
 	return float(integral)
 
 
 def p2():
 	print("\n\nProblem 2")
-	n = 100000
+	n = 100001 # NOTE: I CHANGED THIS SO THAT IT WOULD WORK BECAUSE SIMPSON'S RULE WANTS AN ODD NUMBERED SIZE
 	xmin, xmax = 0, 2*np.pi
 	h = (xmax-xmin)/(n-1)
 	x = np.linspace(xmin, xmax, n)
@@ -285,7 +285,7 @@ def p3():
 
 
 def main():
-	p1()
+	# p1()
 	p2()
 
 if __name__ == '__main__':
