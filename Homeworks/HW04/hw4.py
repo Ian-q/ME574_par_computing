@@ -175,7 +175,7 @@ def par_simpson(v, h):
 	Return:
 		Float quadrature estimate
 	'''
-	# Ensure the input size is odd (required for Simpson's rule)
+	# Ensure the input size is odd for Simpson's rule
 	n = v.size
 	if n % 2 == 0:
 		raise ValueError("Simpson's rule requires an odd number of points.")
@@ -188,7 +188,7 @@ def par_simpson(v, h):
 	d_contribs = cuda.device_array(num_panels, dtype=np.float64)
 
 	# Launch kernel: one thread per panel
-	threads_per_block = 128
+	threads_per_block = TPB
 	blocks_per_grid = (num_panels + threads_per_block - 1) // threads_per_block
 	simpson_kernel[blocks_per_grid, threads_per_block](d_contribs, d_v, h)
 
