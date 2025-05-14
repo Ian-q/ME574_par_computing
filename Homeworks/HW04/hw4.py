@@ -155,19 +155,16 @@ def sum_reduce(a,b):
 	return a + b
 
 @cuda.jit
-def simpson_kernel(d_contribs, d_v):
-	# This kernel computes the panel contributions for Simpson's rule in parallel.
-	# Each thread should compute the contribution for one panel (i.e., for one odd index in d_v).
-	#
-	# Pseudocode:
-	# 1. Get the thread index (i) using cuda.grid(1)
-	# 2. Check if i is within the valid range for panels (i.e., i should be odd and not at the boundaries)
-	#    - Panels are centered at odd indices: i = 1, 3, 5, ..., n-2
-	#    - You may want to launch n//2 threads and map each thread to an odd index
-	# 3. For each valid i, compute the panel contribution using:
-	#    contrib = (h/3) * (d_v[i-1] + 4*d_v[i] + d_v[i+1])
-	# 4. Store the result in d_contribs at the appropriate index
-	pass
+def simpson_kernel(d_contribs, d_v, h):
+	# Each thread computes one Simpson's rule panel contribution.
+	i = cuda.grid(1)
+	n = d_v.size
+ 
+	# There are (n-1)//2 panels for n points (n odd)
+	if i < (n - 1) // 2:
+		vi = 2 * i + 1  # odd index, panel center
+		contrib = (h / 3.0) * (d_v[vi - 1] + 4.0 * d_v[vi] + d_v[vi + 1])
+		d_contribs[i] = contrib
 
 def par_simpson(v, h):
 	'''
