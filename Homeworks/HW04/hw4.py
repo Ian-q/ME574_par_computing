@@ -66,7 +66,7 @@ def rk2_dist(x0:float, y0:float, eps:float, steps:int, h:float):
 	
 	# calcualte d and v for all steps
 	for _ in range(steps):
-		vdp_rk2_step(x, y, eps, h)
+		x, y = vdp_rk2_step(x, y, eps, h)
  
 	return sqrt(x*x+y*y)
 
@@ -304,10 +304,7 @@ def p3():
 	plt.axis([0,1,0,1])
 	plt.show()
 
-
-
-
-
+#================ main =======================================
 def main():
 	p1()
 	p2()
@@ -315,3 +312,4 @@ def main():
 
 if __name__ == '__main__':
 	main()
+	
