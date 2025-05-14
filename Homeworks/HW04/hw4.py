@@ -61,39 +61,15 @@ def rk2_dist(x0:float, y0:float, eps:float, steps:int, h:float):
 	Returns:
 		Float final distance from origin of phase plane: sqrt(x*x+y*y)
 	'''
-	# This function simulates the van der Pol system for a given number of steps
-	# starting from an initial condition (x0, y0).
-	# It uses the vdp_rk2_step function to advance the solution at each time step.
-	# After all steps are completed, it calculates the Euclidean distance
-	# of the final state (x, y) from the origin (0,0).
-	#
-	# The process is as follows:
-	# 1. Initialize the current state (x, y) to the initial state (x0, y0).
-	#    x = x0
-	#    y = y0
-	#
-	# 2. Loop for the given number of `steps`:
-	#    a. Update the state (x, y) by calling `vdp_rk2_step(x, y, eps, h)`.
-	#       x, y = vdp_rk2_step(x, y, eps, h)
-	#
-	# 3. After the loop, calculate the distance of the final state (x, y) from the origin.
-	#    distance = sqrt(x*x + y*y)
-	#
-	# 4. Return the calculated distance.
-
-	# Initialize x and y with x0 and y0
-	# x = ...
-	# y = ...
-
-	# Loop `steps` times:
-	#   Update x and y using vdp_rk2_step
-	#   x, y = vdp_rk2_step(...)
-
-	# Calculate the final distance from the origin
-	# final_dist = sqrt(...)
-
-	# return final_dist
-	pass
+	# remap vars
+	x = x0
+	y = y0
+	
+	# calcualte d and v for all steps
+	for _ in range(steps):
+		vdp_rk2_step(x, y, eps, h)
+ 
+	return sqrt(x*x+y*y)
 
 @cuda.jit
 def dist_kernel(d_out, d_x, d_y, eps, steps, h):
