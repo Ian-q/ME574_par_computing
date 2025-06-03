@@ -25,7 +25,7 @@ damping = 2
 dt = 5e-4
 
 ball_radius = 0.2
-ball_center = ti.Vector.field(3, float, (1,))
+ball_center = ti.Vector.field(3, float, (2,)) # Modified to hold 2 sphere centers
 
 x = ti.Vector.field(3, float, (N, N))
 v = ti.Vector.field(3, float, (N, N))
@@ -156,53 +156,71 @@ def p1():
 
 
 def init_scene():
-    for i, j in ti.ndrange(N, N):
-        x[i, j] = ti.Vector([i * cell_size ,
-                             j * cell_size / ti.sqrt(2),
-                             (N - j) * cell_size / ti.sqrt(2)])
-    ball_center[0] = ti.Vector([0.5, -0.5, -0.0])
+	for i, j in ti.ndrange(N, N):
+		x[i, j] = ti.Vector([i * cell_size ,
+							 j * cell_size / ti.sqrt(2),
+							 (N - j) * cell_size / ti.sqrt(2)])
+	ball_center[0] = ti.Vector([0.25, -0.5, 0.0])
+	ball_center[1] = ti.Vector([0.75, -0.5, 0.0]) # Added second sphere
 
 @ti.kernel
 def set_indices():
-    for i, j in ti.ndrange(N, N):
-        if i < N - 1 and j < N - 1:
-            square_id = (i * (N - 1)) + j
-            # 1st triangle of the square
-            indices[square_id * 6 + 0] = i * N + j
-            indices[square_id * 6 + 1] = (i + 1) * N + j
-            indices[square_id * 6 + 2] = i * N + (j + 1)
-            # 2nd triangle of the square
-            indices[square_id * 6 + 3] = (i + 1) * N + j + 1
-            indices[square_id * 6 + 4] = i * N + (j + 1)
-            indices[square_id * 6 + 5] = (i + 1) * N + j
+	for i, j in ti.ndrange(N, N):
+		if i < N - 1 and j < N - 1:
+			square_id = (i * (N - 1)) + j
+			# 1st triangle of the square
+			indices[square_id * 6 + 0] = i * N + j
+			indices[square_id * 6 + 1] = (i + 1) * N + j
+			indices[square_id * 6 + 2] = i * N + (j + 1)
+			# 2nd triangle of the square
+			indices[square_id * 6 + 3] = (i + 1) * N + j + 1
+			indices[square_id * 6 + 4] = i * N + (j + 1)
+			indices[square_id * 6 + 5] = (i + 1) * N + j
 
 links = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]
 links = [ti.Vector(v) for v in links]
 
 @ti.kernel
 def step():
-    for i in ti.grouped(x):
-        v[i].y -= gravity * dt
-    for i in ti.grouped(x):
-        force = ti.Vector([0.0,0.0,0.0])
-        for d in ti.static(links):
-            j = min(max(i + d, 0), [N-1,N-1])
-            relative_pos = x[j] - x[i]
-            current_length = relative_pos.norm()
-            original_length = cell_size * float(i-j).norm()
-            if original_length != 0:
-                force +=  stiffness * relative_pos.normalized() * (current_length - original_length) / original_length
-        v[i] +=  force * dt
-    for i in ti.grouped(x):
-        v[i] *= ti.exp(-damping * dt)
-        if (x[i]-ball_center[0]).norm() <= ball_radius:
-            v[i] = ti.Vector([0.0, 0.0, 0.0])
-        x[i] += dt * v[i]
+	for i in ti.grouped(x):
+		v[i].y -= gravity * dt
+	for i in ti.grouped(x):
+		force = ti.Vector([0.0,0.0,0.0])
+		for d in ti.static(links):
+			j = min(max(i + d, 0), [N-1,N-1])
+			relative_pos = x[j] - x[i]
+			current_length = relative_pos.norm()
+			original_length = cell_size * float(i-j).norm()
+			if original_length != 0:
+				force +=  stiffness * relative_pos.normalized() * (current_length - original_length) / original_length
+		v[i] +=  force * dt
+	for i in ti.grouped(x):
+		# Apply damping to velocity
+		v[i] *= ti.exp(-damping * dt)
+		# Check collision with both spheres
+		for b in range(2):
+			rel = x[i] - ball_center[b]
+			dist = rel.norm()
+			# If inside the sphere
+			if dist <= ball_radius:
+				# Compute normal direction
+				collision_offset = 2e-2  # Small offset to prevent visual clipping
+				normal = rel.normalized()
+				if dist <= ball_radius + collision_offset:
+					# Push the point just outside the sphere's surface
+					x[i] = ball_center[b] + normal * (ball_radius + collision_offset)
+				# Only zero out normal velocity component if moving into the sphere
+				vel_normal = v[i].dot(normal)
+				if vel_normal < 0:
+					# Remove only the normal component (allow sliding)
+					v[i] -= vel_normal * normal
+		# Update position
+		x[i] += dt * v[i]
 
 @ti.kernel
 def set_vertices():
-    for i, j in ti.ndrange(N, N):
-        vertices[i * N + j] = x[i, j]
+	for i, j in ti.ndrange(N, N):
+		vertices[i * N + j] = x[i, j]
 
 def p2():
 	init_scene()
@@ -233,5 +251,5 @@ def main():
 
 if __name__ == '__main__':
 	main()
- 
+
 
