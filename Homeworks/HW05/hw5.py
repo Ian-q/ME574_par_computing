@@ -178,8 +178,9 @@ def init_scene():
 
 	# NOTE:
 	# the positions of the ball's having 2 for the last component make them be behind the camera,
-	# but i would have to edit the p2() code to make them visible, so instead i've left the positions
-	# at [.25, -.5, 0.] and [.75, -0.5, 0.] respectively.
+	# but i would have to edit the p2() code to make them visible, which i thought we were supposed
+    # to try not to do, so instead i've left the positions at [.25, -.5, 0.] and [.75, -0.5, 0.] respectively.
+    # note that it would be trivial to just move the camera back a bit to show the spheres otherwise
 
 
 @ti.kernel
