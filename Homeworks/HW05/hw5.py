@@ -93,51 +93,64 @@ def point_contrib(i, j, f, g, h):
 
 @ti.kernel
 def g_kernel(integrand:ti.template()):
-	for i in range(n):
-		for j in range(n):
-			g[i,j] = integrand(i,j)
+	for i, j in g: # Parallel iteration over all grid points
+		g[i,j] = integrand(i,j)
 
 @ti.kernel
 def f_kernel(frep:ti.template(), x0:float, y0:float, r:float):
-	for i in range(n):
-		for j in range(n):
-			f[i,j] = frep(i,j, x0, y0, r)
+	for i, j in f: # Parallel iteration over all grid points
+		f[i,j] = frep(i,j, x0, y0, r)
 
 @ti.kernel
 def nested_paint(x: float, y: float, w: float):
+	ti.loop_config(serialize=True) # Make this kernel's loops serial
 	for i in range(1,n-1):
 		for j in range(1,n-1):
 			dI[i, j] = point_contrib(i, j, f, g, h)
 
 @ti.kernel
 def paint(x: float, y: float, w: float):
-	for i in range(1,n-1):
-		for j in range(1,n-1):
-			dI[i, j] = point_contrib(i, j, f, g, h)
+	for i, j in ti.ndrange((1, n - 1), (1, n - 1)): # Explicit parallel iteration over relevant grid points
+		dI[i, j] = point_contrib(i, j, f, g, h)
 
 @ti.kernel
-def reduce(f:ti.template()):
+def reduce(f_reduce:ti.template()): # Renamed f to f_reduce to avoid conflict with global f
 	perim[None]=0.
-	for i in range(n):
-		for j in range(n):
-			perim[None] += f[i,j]
+	for i, j in f_reduce: # Parallel iteration
+		perim[None] += f_reduce[i,j]
 
 def p1():
 	ti.profiler.clear_kernel_profiler_info()
 	g_kernel(one)
 	f_kernel(block,xc,yc,w)
-	ti.profiler.clear_kernel_profiler_info()
-	ti.profiler.set_kernel_profiler_toolkit('default')
-	nested_paint(xc,yc,w)
-	paint(xc,yc,w)
-	ti.profiler.print_kernel_profiler_info('trace')
+	
+	# Profile serial and parallel versions
+	ti.profiler.clear_kernel_profiler_info() # Clear before profiling specific kernels
+	ti.profiler.set_kernel_profiler_toolkit('default') # Ensure profiler is active
+	
+	# Time the serial version
+	nested_paint(xc,yc,w) # Serial version
+	serial_time = ti.profiler.get_kernel_profiler_total_time()
+	
+	ti.profiler.clear_kernel_profiler_info() # Clear between profiling runs
+	
+	# Time the parallel version
+	paint(xc,yc,w)        # Parallel version
+	parallel_time = ti.profiler.get_kernel_profiler_total_time()
+	
+	# Calculate speedup factor
+	speedup = serial_time / parallel_time if parallel_time > 0 else float('inf')
+	
+	#ti.profiler.print_kernel_profiler_info('trace') # Print results for both
+	
 	reduce(dI)
-	ti.profiler.clear_kernel_profiler_info()
+	ti.profiler.clear_kernel_profiler_info() # Clear after use is good practice
+
 	print('Problem 1')
 	print(f"perim = {h*h*perim[None]:.2f}\n")
-	print('Original timing = ')
-	print('Fully parallel timing =' )
-	print('Speedup factor = ')
+	print(f'Original timing = {serial_time:.6f} ms')
+	print(f'Fully parallel timing = {parallel_time:.6f} ms')
+	print(f'Speedup factor = {speedup:.2f}x')
 
 ####################
 #### Problem 2 #####
@@ -160,8 +173,14 @@ def init_scene():
 		x[i, j] = ti.Vector([i * cell_size ,
 							 j * cell_size / ti.sqrt(2),
 							 (N - j) * cell_size / ti.sqrt(2)])
-	ball_center[0] = ti.Vector([0.25, -0.5, 0.0])
-	ball_center[1] = ti.Vector([0.75, -0.5, 0.0]) # Added second sphere
+	ball_center[0] = ti.Vector([0.25, -0.5, 0.])
+	ball_center[1] = ti.Vector([0.75, -0.5, 0.]) # Added second sphere
+
+	# NOTE:
+	# the positions of the ball's having 2 for the last component make them be behind the camera,
+	# but i would have to edit the p2() code to make them visible, so instead i've left the positions
+	# at [.25, -.5, 0.] and [.75, -0.5, 0.] respectively.
+
 
 @ti.kernel
 def set_indices():
@@ -199,7 +218,7 @@ def step():
 		v[i] *= ti.exp(-damping * dt)
 		# Check collision with both spheres
 		for b in range(2):
-			rel = x[i] - ball_center[b]
+			rel = x[i] - ball_center[b] # vector from sphere center to cloth point
 			dist = rel.norm()
 			# If inside the sphere
 			if dist <= ball_radius:
@@ -212,7 +231,7 @@ def step():
 				# Only zero out normal velocity component if moving into the sphere
 				vel_normal = v[i].dot(normal)
 				if vel_normal < 0:
-					# Remove only the normal component (allow sliding)
+					# Remove only the normal component to allow sliding
 					v[i] -= vel_normal * normal
 		# Update position
 		x[i] += dt * v[i]
