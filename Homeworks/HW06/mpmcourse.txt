@@ -1,0 +1,4470 @@
+The Material Point Method for Simulating
+Continuum Materials
+Chenfanfu Jiang∗1, Craig Schroeder†2, Joseph Teran‡1,3,
+Alexey Stomakhin§3, and Andrew Selle¶3
+1
+
+Department of Mathematics, University of California, Los Angeles
+of Computer Science, University of California, Riverside
+3 Walt Disney Animation Studios
+
+2 Department
+
+SIGGRAPH 2016 Course Notes Version 1 (May 2016)
+
+∗
+†
+‡
+§
+¶
+
+cffjiang@math.ucla.edu
+snubdodecahedron@gmail.com
+jteran@math.ucla.edu
+alexey.stomakhin@disneyanimation.com
+andrew.selle@disneyanimation.com
+
+Permission to make digital or hard copies of part or all of this work for personal or
+classroom use is granted without fee provided that copies are not made or distributed
+for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for third-party components of this work must be
+honored. For all other uses, contact the Owner/Author. Copyright is held by the owner/author(s).
+SIGGRAPH ’16 Courses, July 24-28, 2016, Anaheim, CA,
+ACM 978-1-4503-4289-6/16/07.
+http://dx.doi.org/10.1145/2897826.2927348
+
+1
+
+2
+
+abstract
+Simulating the physical behaviors of deformable objects and fluids has been an important topic in computer graphics. While the Lagrangian Finite Element Method (FEM) is
+widely used for elasto-plastic solids, it usually requires additional computational components in the case of large deformation, mesh distortion, fracture, self-collision and coupling between materials. Often, special solvers and strategies need to be developed for
+a particular problem. Recently, the hybrid Eulerian/Lagrangian Material Point Method
+(MPM) was introduced to the graphics community. It uses a continuum description of
+the governing equations and utilizes user-controllable elasto-plastic constitutive models.
+The hybrid nature of MPM allows using a regular Cartesian grid to automate treatment
+of self-collision and fracture. Like other particle methods such as Smoothed Particle
+Hydrodynamics (SPH), topology change is easy due to the lack of explicit connectivity
+between Lagrangian particles. Furthermore, MPM allows a grid-based implicit integration scheme that has conditioning independent of the number of Lagrangian particles.
+MPM also provides a unified particle simulation framework similar to Position Based
+Dynamics (PBD) for easy coupling of different materials. The power of MPM has been
+demonstrated in a number of recent papers for simulating various materials including
+elastic objects, snow, lava, sand and viscoelastic fluids. It is also highly integrated into the
+production framework of Walt Disney Animation Studios and has been used in featured
+animations including Frozen, Big Hero 6 and Zootopia.
+
+Contents
+
+contents
+1 About the Lecturers
+2 Syllabus
+2.1 Intended Audience . . . . . . . . . . . . . . . . . . . . . . .
+2.2 Prerequisites . . . . . . . . . . . . . . . . . . . . . . . . . . .
+2.3 Level of Difficulty . . . . . . . . . . . . . . . . . . . . . . . .
+2.4 Tentative Schedule . . . . . . . . . . . . . . . . . . . . . . .
+3 Introduction
+4 MPM in Production
+5 Kinematics Theory
+5.1 Continuum Motion . . . . . . . . . . . . . . . . . . . . . . .
+5.2 Deformation . . . . . . . . . . . . . . . . . . . . . . . . . . .
+5.3 Push Forward and Pull Back . . . . . . . . . . . . . . . . . .
+5.4 Material Derivative . . . . . . . . . . . . . . . . . . . . . . .
+5.5 Volume and Area Change . . . . . . . . . . . . . . . . . . .
+6 Hyperelasticity
+6.1 First Piola-Kirchoff Stress . . . . . . . . . . . . . . . . . . .
+6.2 Neo-Hookean . . . . . . . . . . . . . . . . . . . . . . . . . .
+6.3 Fixed Corotated Constitutive Model . . . . . . . . . . . . .
+6.4 A Practical Differentiation Strategy for Isotropic Elasticity
+6.5 Snow Plasticity . . . . . . . . . . . . . . . . . . . . . . . . .
+7 Governing Equations
+7.1 Conservation of Mass . . . . . . . . . . . . . . . . . . . . . .
+7.2 Conservation of Momentum . . . . . . . . . . . . . . . . . .
+7.3 Weak Form . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+8 Material Particles
+8.1 Eulerian Interpolating Functions . . . . . . . . . . . . . . .
+8.2 Eulerian/Lagrangian Mass . . . . . . . . . . . . . . . . . . .
+8.3 Eulerian/Lagrangian Momentum . . . . . . . . . . . . . . .
+8.4 Eulerian to Lagrangian Transfer . . . . . . . . . . . . . . . .
+9 Discretization
+9.1 Discrete Time . . . . . . . . . . . . . . . . . . . . . . . . . .
+9.2 Discrete Space . . . . . . . . . . . . . . . . . . . . . . . . . .
+9.3 Estimating the Volume . . . . . . . . . . . . . . . . . . . . .
+9.4 Deformation Gradient Evolution . . . . . . . . . . . . . . .
+9.5 Forces as Energy Gradient . . . . . . . . . . . . . . . . . . .
+10 Explicit Time Integration
+10.1 APIC Transfers . . . . . . . . . . . . . . . . . . . . . . . . . .
+10.2 Deformation Gradient Update . . . . . . . . . . . . . . . . .
+10.3 State Update . . . . . . . . . . . . . . . . . . . . . . . . . . .
+10.4 Forces . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+. . . . . . . . . .
+. . . . . . . . . .
+. . . . . . . . . .
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+.
+.
+.
+.
+
+5
+7
+7
+7
+7
+7
+9
+10
+10
+11
+12
+13
+15
+16
+17
+18
+19
+19
+21
+25
+27
+28
+29
+30
+31
+32
+33
+34
+35
+35
+35
+36
+38
+38
+39
+41
+41
+42
+43
+43
+
+3
+
+Contents
+10.5 MPM Scheme: Full Algorithm .
+11 Implicit Time Integration
+11.1 Force Derivative . . . . . . . . .
+11.2 Backward Euler System . . . .
+11.3 Newton’s Method . . . . . . . .
+11.4 Linearized Force . . . . . . . . .
+11.5 Optimization based Integrator .
+12 More Topics
+12.1 Collision Objects . . . . . . . . .
+12.2 Lagrangian Forces . . . . . . . .
+Bibliography
+
+. . . . . . . . . . . . . . . . . . . . . . . . . .
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+.
+.
+.
+.
+.
+
+. . . . . . . . . . . . . . . . . . . . . . . . . .
+. . . . . . . . . . . . . . . . . . . . . . . . . .
+
+44
+45
+45
+46
+47
+47
+48
+49
+49
+50
+51
+
+4
+
+about the lecturers
+
+1
+
+about the lecturers
+
+Chenfanfu Jiang
+Mathematics Department
+University of California, Los Angeles
+cffjiang@math.ucla.edu
+
+Chenfanfu Jiang received his Ph.D. in Computer Science at UCLA in 2015, awarded
+UCLA Engineering School Edward K. Rice Outstanding Doctoral Student. He is currently
+a postdoctoral researcher at UCLA, jointly appointed to the departments of Mathematics
+and Computer Science. His primary research interests include solid/fluid mechanics,
+physics based simulation and their applications to medical simulation and scene understanding. He actively collaborates with Walt Disney Animation Studios and Center for
+Advanced Surgical and Interventional Technology (CASIT).
+
+Craig Schroeder
+Computer Science Department
+University of California, Riverside
+snubdodecahedron@gmail.com
+
+Craig Schroeder is currently an assistant professor in computer science at University of
+California Riverside. He received his Ph.D. in computer science from Stanford University
+in 2011, followed by a postdoc at University of California Los Angeles, where he received
+the Chancellor’s Award for Postdoctoral Research in 2013, recognizing research impact
+and value to the UCLA community. He actively publishes in both computer graphics and
+computational physics. His primary areas of interest are solid mechanics and computational fluid dynamics and their applications to physically based animation for computer
+graphics. He began collaborating with Pixar Animation Studios during his Ph.D. and
+later collaborated with Walt Disney Animation Studios during his postdoctoral studies.
+For his research contributions he received screen credits in Pixar’s "Up" and Disney’s
+"Frozen."
+
+Joseph Teran
+Mathematics Department
+University of California, Los Angeles
+jteran@math.ucla.edu
+
+5
+
+about the lecturers
+Joseph Teran is a professor of applied mathematics at UCLA. His research focuses on
+numerical methods for partial differential equations in classical physics, including computational solids and fluids, multi-material interactions, fracture dynamics and computational biomechanics. He also works with Walt Disney Animation applying scientific
+computing techniques to simulate the dynamics of virtual materials like skin/soft tissue,
+water, smoke and recently, snow for the movie “Frozen". Teran received a 2011 Presidential Early Career Award for Scientists and Engineers (PECASE) and a 2010 Young
+Investigator award from the Office of Naval Research.
+
+Alexey Stomakhin
+Walt Disney Animation Studios
+alexey.stomakhin@disneyanimation.com
+
+Alexey Stomakhin is a Senior Software Engineer at Walt Disney Animation Studios. He
+is responsible for developing tools for simulation of environmental effects. He is the
+lead developer of the Disney in-house Material Point Method engine (a.k.a. Matterhorn)
+which was used extensively for snow simulation in Frozen (2013), and also in Big Hero 6
+(2014) and Zootopia (2016). He also does research and works extensively on the simulation of fluids, multi-material interactions and parallel/distributed computing. He holds
+a Ph.D. degree in Mathematics from University of California, Los Angeles (2013).
+
+Andrew Selle
+Walt Disney Animation Studios
+andrew.selle@disneyanimation.com
+
+Andrew Selle, Principal Software Engineer, is responsible for developing tools and techniques for simulation and rendering at Walt Disney Animation Studios. He focused
+on fluid simulation techniques in "Tangled", rigid bodies and volumetric rendering on
+"Wreck-It-Ralph" and Snow simulation and rendering on "Frozen." He also was a major
+developer on Disney’s Hyperion Renderer used in Big Hero 6, Feast, Zootopia, and all
+upcoming Disney Animation Films. As part of his work he has contributed to the open
+source community by releasing and maintaining the SeExpr and Partio libraries. Besides
+development, he remains active in research oriented publication, continuing to publish
+articles in refereed journals and conferences. Prior to his current position, he was a Research and Development Software Engineer at Industrial Light + Magic. He holds a B.S.
+in Mathematics in Computer Science from the University of Wisconsin Madison and a
+M.S. and Ph.D. in Computer Science from Stanford University.
+
+6
+
+syllabus
+
+2
+
+syllabus
+
+2.1
+
+Intended Audience
+
+These notes are intended for industry professionals and academic researchers interested
+in recent advances in the Material Point Method for simulating various materials for
+computer animation and visual effects.
+
+2.2
+
+Prerequisites
+
+This course requires minimal concepts of continuum mechanics. Familiarity with multivariable calculus, linear algebra and common numerical algorithms is assumed. No
+experience of MPM is required. Some previous knowledge and experience with the
+Finite Element Method (FEM) and continuum mechanics would benefit.
+
+2.3
+
+Level of Difficulty
+
+Easy/Intermediate.
+
+2.4
+
+Tentative Schedule
+
+1. Introduction and Welcome (All speakers) (5 min)
+• Introduction of Speakers
+• Course overview
+• MPM introduction: advantages and limitations
+• Research demos, Disney production clips
+2. MPM in Disney (Alexey Stomakhin, Andrew Selle) (35 min)
+3. Continuum Mechanics Concepts (Joseph Teran) (15 min)
+• Continuum description of material motion
+• Kinematics, deformation gradient, strain
+• Stress and hyperelasticity
+• Governing equations, conservation of mass/momentum
+4. MPM Algorithm (Explicit integration) (Chenfanfu Jiang) (15 min)
+• Particle-Grid transfers
+
+7
+
+syllabus
+• Deformation gradient update
+• Force computations
+• Symplectic Euler time integration
+• The full MPM algorithm
+5. MPM Algorithm (Implicit integration) (Craig Schroeder) (15 min)
+• Force derivative computations
+• Backward Euler time integration
+• Force linearization
+• Newton’s method for MPM
+6. Conclusion (Joseph Teran) (5 min)
+• Difficulties and workarounds
+• Open problems, interesting research directions
+• Conclusion, Q&A
+
+8
+
+introduction
+
+3
+
+introduction
+
+Simulating natural phenomena for virtual worlds and characters is an important application that remains extremely challenging. An artist’s need to manipulate and comprehend physical simulations imposes a significant constraint, all but requiring simulation
+methods to involve Lagrangian particles. In addition, the need for computational efficiency, topology change and numerical stability has led engineers toward hybrid Lagrangian/Eulerian methods. In this course, we focus on the Material Point Method
+(MPM), which rises as the generalization of Particle In Cell (PIC) and Fluid Implicit Particle Method (FLIP) to solid mechanics [Sulsky et al., 1995]. MPM methods combine
+Lagrangian material particles (points) with Eulerian Cartesian grids. Notably, there is no
+inherent need for Lagrangian mesh connectivity.
+Many researchers in graphics have experimented with hybrid grid and particle methods.
+While FLIP has been known in graphics community as a useful liquid simulation method
+for a while [Zhu and Bridson, 2005; Bridson, 2008; Ando and Tsuruno, 2011], MPM is only
+introduced and studied recently.
+MPM has been shown to be a very effective hybrid particle/grid method for simulating
+various solid materials in computer graphics. Stomakhin et al. [2013] and Disney’s Frozen
+use MPM to simulate snow. Hegemann et al. [2013] uses impulses derived from MPM to
+resolve colliding embedded deformable object pieces. Stomakhin et al. [2014] augments
+MPM for simulating incompressible materials and melting/freezing. Ram et al. [2015]
+and Yue et al. [2015] show that MPM is also suitable for complex fluids. Gast et al. [2015]
+presents an optimization based integrator to accelerate the nonlinear MPM solver. Jiang
+et al. [2015]; Jiang [2015]; Jiang et al. [2016] propose a stable and angular momentum
+conserving scheme to improve the particle/grid transfers in MPM. Klar et al. [2016] and
+Daviet and Bertails-Descoubes [2016] use MPM to discretize the engineering favored
+Drucker-Prager elastoplastity to simulate sand dynamics.
+As with PIC/FLIP, MPM implicitly handles self-collision and fracture with the use of
+the background Eulerian grid. As a hybrid Lagrangian/Eulerian approach, MPM has
+the following advantages when compared with traditional Lagrangian methods (such as
+FEM solids) and Eulerian methods (such as grid-based fluids):
+• Just like Lagrangian FEM, MPM can be derived from the weak form of conservation
+of momentum, allowing for physically accurate discretization of physical laws.
+• Boundary conditions, solid wall collisions and external forces can be easily applied
+on the grid and particles.
+• Automatic self collision/contact due to the fact that particle movements are interpolated from undistortable nodal movement on a grid.
+• Automatic splitting and merging behaviors because of particle based material representation. This is remarkably useful for fluids and granular materials.
+
+9
+
+mpm in production
+• Automatic multi-material and multiphase coupling can be easily done solely by
+giving particles different material properties or constitutive models.
+• MPM can also be used to simulate mesh-based Lagrangian forces without loosing
+its advantages. (See Section 12.2.) This provides the opportunity of coupling point
+based objects and mesh based objects with a single solve on the grid that handles
+collisions automatically.
+More rigorously speaking, MPM is a Lagrangian method, but with an Eulerian grid
+used for computing derivatives. This alleviates the need for a Lagrangian mesh (for
+derivative computation) that would get tangled when the material is highly deformed
+from its original configuration. This lets you simulate a wider class of materials than
+with a purely Lagrangian method. The Eulerian aspects allow for natural treatment of
+topological changes and collisions (self and with external objects). There is a sacrifice of
+some accuracy in doing this though and materials like e.g. hyperelasticity are not going
+to be simulated as effectively. On the other hand, you get self collisions and topology
+changes for free.
+
+4
+
+mpm in production
+
+MPM is adopted in Walt Disney Animation Studios for simulating various materials
+including most of the dynamic snow in Frozen. It is also highly integrated into the
+production framework of Big Hero 6 and Zootopia.
+
+5
+
+kinematics theory
+
+The contents in this section mostly follow [Bonet and Wood, 2008]. We summarize the
+important concepts that are helpful for understanding the essence of MPM.
+First and foremost, MPM particles are not individual particles, molecules, atoms or little
+spheres as one may naturally think when seeing a “particle” method. Each MPM particle actually represents a continuous piece of material, or really a subset of the whole
+simulated material domain. For those familiar with FEM style weak forms of equations,
+material points can be thought of as quadrature points for the discretization of spatial
+stress derivatives (we will talk about the discretization in Section 9).
+Such a view is very common in computational mechanics. When we talk about continuum bodies or continuum mechanics, we have adopted the continuum assumption. This
+means the studied material (either solid, liquid or gas) is treated as continuous pieces of
+matter. Such a view is very practical in engineering and graphics applications (as well
+as in everyday life) where it is really not necessary to deal with the microscopic inter-
+
+10
+
+kinematics theory
+actions between molecules and atoms. Note that a continuum assumption can be made
+for almost all solids and fluids that are extensively simulated for graphics, including deformable (elastic and plastic) objects, muscle, flesh, cloth, hair, liquids, smoke, gas and
+granular materials (sand, snow, mud, soil etc.). A continuum body defines quantities
+such as density, velocity, and force as continuous functions of position. Equations of
+motion are solved in the spatial domain, and evolved in time to simulate the behaviors
+of the simulated materials.
+
+5.1
+
+Continuum Motion
+
+Kinematics refers to the study of motion occurred in continuum materials. The main
+focus is the change of shape, or the deformation, either locally or globally in different
+coordinate systems of interest. Describing the motion qualitatively and quantitatively is
+very essential for deriving governing equations of dynamics and mechanical responses.
+Luckily in most cases, we can describe kinematics without introducing the meaning of
+force, stress or even mass.
+In continuum mechanics, the deformation is usually represented with the material (or
+undeformed) space X, the world (or deformed) space x and a deformation map φ(X, t).
+You can simply treat X as the “initial position” and x as the “current position” for any
+point in the simulated material. In particular, at time t = 0, X and x have the same value.
+Here is a more detailed definition. We consider the motion of material to be determined
+by a mapping φ(·, t) : Ω0 → Ωt for Ω0 , Ωt ⊂ Rd where d = 2 or 3 is the dimension of the
+simulated problem (or domain). The mapping φ is sometimes called the flow map or the
+deformation map. Points in the set Ω0 are referred to as material points and are denoted
+as X. Points in Ωt represent the location of material points at time t. They are referred
+to as x. In other words, φ describes the motion of each material point X ∈ Ω0 over time
+x = x(X, t) = φ(X, t).
+
+(1)
+
+For example, if our object is moving with a constant speed v along direction n, then we
+have
+x = X + tvn.
+
+(2)
+
+If an object went through some rigid motion after time t (compared to time 0), we will
+have
+x = RX + b,
+
+(3)
+
+where R is a rotation matrix, b is some translation. R and b will probably be some
+function with respect to time t and initial position X, depending on the actual motion.
+
+11
+
+kinematics theory
+This mapping can be used to quantify the relevant continuum based physics. For example, the velocity of a given material point X at time t is
+∂φ
+(X, t)
+∂t
+
+(4)
+
+∂2 φ
+∂V
+(X,
+t)
+=
+(X, t).
+∂t
+∂t2
+
+(5)
+
+V(X, t) =
+also the acceleration is
+A(X, t) =
+
+I.e. V(·, t) : Ω0 → Rd and A(·, t) : Ω0 → Rd .
+The velocity V and acceleration A defined above are based on the “Lagrangian view”,
+where they are functions of the material configuration X and time t. Physically, this
+means we are measuring them on a fixed particle. This particle has its mass and occupies
+some volume since the beginning. This is an important concept, because soon we will
+encounter the “Eulerian view”, where we are sitting at a fixed position in the space
+and measuring the velocity of whichever particle that is passing by that position. For
+example, the flow velocity in a grid based fluid simulation is a typical Eulerian viewed
+quantity. For solid simulation and continuum mechanics, it is often more natural (but
+not necessary) to start from the Lagrangian view for deriving stuff.
+
+5.2
+
+Deformation
+
+Now we have X and x being material coordinates and world coordinates, and they belong
+to domain Ω0 and Ωt respectively. For any point X in Ω0 , we also have Φ to map it to
+Ωt for a given time t via x = Φ(X, t).
+The Jacobian of the deformation map φ is useful for a number of reasons described below.
+E.g. the physics of elasticity is naturally described in terms of this Jacobian. It is standard
+notation to use F to refer to the Jacobian of the deformation mapping
+F(X, t) =
+
+∂φ
+∂x
+(X, t) =
+(X, t).
+∂X
+∂X
+
+(6)
+
+F is often simply called the deformation gradient. Discretely it is often a small 2 × 2
+or 3 × 3 matrix. One special case is for a cloth/thin shell in 3D, F is 3 × 2 because the
+material space is really just 2D. It can be thought of as F(·, t) : Ω0 → Rd×d . In other
+words, for every material point X, F(X, t) is the Rd×d matrix describing the deformation
+Jacobian of the material at time t. We can also use the index notation
+Fij =
+
+∂φi
+∂xi
+=
+, i, j = 1, . . . , d.
+∂Xj
+∂Xj
+
+(7)
+
+Now we can compute the deformation gradient of the deformation map in Equation
+2. The result is the identity matrix. For the one in Equation 3 we get F = R. In both
+
+12
+
+kinematics theory
+
+x02
+b
+
+x01
+b
+
+F
+b
+
+b
+
+Ω0
+
+x2
+
+x1
+
+Ω
+
+Figure 1: Deformation gradient.
+
+these cases, we know the object does not really deform because all they did are rigid
+transformations. Such deformation gradients should not result in any internal forces in
+the material unless artistic effects are desired.
+Intuitively, the deformation gradient represents how deformed a material is locally. For
+example, let x01 and x02 be two nearby points embedded in the material (see Figure 1) at
+the beginning of the simulation, and let x1 and x2 be the same two points in the current
+configuration. Then (x2 − x1 ) = F(x02 − x01 ).
+The determinant of F (commonly denoted with J) is also often useful because it characterizes infinitesimal volume change. It is commonly denoted with J = det (F). J is the
+ratio of the infinitesimal volume of material in configuration Ωt to the original volume
+in Ω0 . As an example, it is easy to see for rigid motions (rotations and translations), F
+is a rotation matrix and J = 1. Note that identity matrix is also a rotation matrix. J > 1
+means volume increase and J < 1 means decrease.
+J = 0 means the volume becomes zero. In the real world, this will never happen. However, numerically it is possible to achieve such an F. In 3D, that suggests the material
+is so compressed that it becomes a plane or a line or a single volumeless point. J < 0
+means the material is inverted. Consider a triangle in 2D, J < 0 means one vertex passes
+through its opposing edge, and the area of this triangle becomes negative. Invertible
+elasticity [Irving et al., 2004; Stomakhin et al., 2012] is one of the popular methods for
+resolving these cases. The model we will talk about in Section 6 for snow will be fine
+with these degenerate cases due to its nice numerical properties.
+
+5.3 Push Forward and Pull Back
+So far we have assumed quantities are in terms of (X, t), this is called the Lagrangian
+view. The mapping φ is assumed to be bijective. And since we will assume it is smooth,
+
+13
+
+kinematics theory
+this means that the sets Ω0 and Ωt are homeomorphic/diffeomorphic under φ. This is
+associated with the assumption that no two different particles of material ever occupy the
+same space at the same time. This means that ∀x ∈ Ωt , ∃!X ∈ Ω0 such that φ(X, t) = x.
+In other words, there exist an inverse mapping φ−1 (·, t) : Ωt → Ω0 . This means that
+any function over one set can naturally be thought of as a function over the other set
+by means of change of variables. We denote this interchange of independent variable
+as either push forward (taking a function defined over Ω0 and defining a counterpart
+over Ωt ) or vice versa (pull back). For example, given G : Ω0 → R the push forward
+g(·, t) : Ωt → R is defined as g(x, t) = G(φ−1 (x, t)). Similarly, the pull back of g is
+G(X) = g(φ(X, t), t) which can be seen to be exactly G(X) by definition of the inverse
+mapping.
+The push forward of a function is sometimes referred to as Eulerian (a function of x)
+and the pull back function is sometimes referred to as Lagrangian (a function of X).
+As previously defined in Equation 4 and 5, the velocity and acceleration functions are
+Lagrangian. Let’s rewrite them here:
+∂φ
+(X, t)
+∂t
+∂2 φ
+∂V
+(X, t).
+A(X, t) =
+(X,
+t)
+=
+∂t
+∂t2
+V(X, t) =
+
+(8)
+(9)
+
+It is also useful to define Eulerian counterparts. That is, using push forward,
+v(x, t) = V(φ−1 (x, t), t),
+−1
+
+a(x, t) = A(φ (x, t), t).
+
+(10)
+(11)
+
+With this, we can also see that the pull back formula are
+V(X, t) = v(φ(X, t), t),
+
+(12)
+
+A(X, t) = a(φ(X, t), t).
+
+(13)
+
+With this notion of a and v we can see that (using chain rule)
+A(X, t) =
+
+∂
+∂v
+∂v
+∂φ
+V(X, t) =
+(φ(X, t), t) +
+(φ(X, t), t) (X, t).
+∂t
+∂t
+∂x
+∂t
+
+(14)
+
+Using index notation, this can be written as
+Ai (X, t) =
+
+∂φj
+∂
+∂vi
+∂vi
+Vi (X, t) =
+(φ(X, t), t) +
+(φ(X, t), t)
+(X, t).
+∂t
+∂t
+∂xj
+∂t
+
+(15)
+
+where summation is implied on the repeated index j.
+Combining Equation 8 and 10, we have
+vj (x, t) =
+
+∂φj −1
+(φ (x, t), t).
+∂t
+
+(16)
+
+14
+
+kinematics theory
+Combining Equation 11 and 15, we have
+ai (x, t) = Ai (φ−1 (x, t), t) =
+
+∂vi
+∂vi
+(x, t) +
+(x, t)vj (x, t)
+∂t
+∂xj
+
+(17)
+
+where we used x = φ(φ−1 (x, t), t) (by definition).
+We thus get a seemingly non-intuitive result:
+ai (x, t) 6=
+
+5.4
+
+∂vi
+(x, t).
+∂t
+
+(18)
+
+Material Derivative
+
+Although the relationship between the Eulerian a and v is not simply via partial differentiation with respect to time, the relationship is a common one and it is often called the
+material derivative. The notation
+∂vi
+∂vi
+D
+vi (x, t) =
+(x, t) +
+(x, t)vj (x, t)
+Dt
+∂t
+∂xj
+is often introduced so that
+a=
+
+D
+v.
+Dt
+
+(19)
+
+(20)
+
+For a general Eulerian function f(·, t) : Ωt → R, we use this same notation to mean
+∂f
+∂f
+D
+f(x, t) = (x, t) +
+(x, t)vj (x, t).
+Dt
+∂t
+∂xj
+
+(21)
+
+D
+∂
+Note that Dt
+f(x, t) is the push forward of ∂t
+F where F is a Lagrangian function with
+∂
+D
+0
+F(X, t) to Dt
+f(x, t)
+F(·, t) : Ω → R. F is the pull back of f. This rule of pushing forward ∂t
+is very useful, and should always be kept in mind.
+
+The deformation gradient is usually thought of as Lagrangian. That is, most of the time
+when this comes up in the physics of a material, the Lagrangian view is the dominant one.
+There is however a useful evolution of the Eulerian (push forward) of F(·, t) : Ω0 → Rd×d .
+Let f(·, t) : Ωt → Rd×d be the push forward of F, then
+D
+∂v
+D
+∂vi
+f=
+f or
+fij =
+fkj
+Dt
+∂x
+Dt
+∂xk
+
+(22)
+
+with summation implied on the repeated index k. We can see this because
+∂
+∂ ∂φi
+∂Vi
+∂vi
+∂φk
+(X, t) =
+(X, t) =
+(φ(X, t), t)
+(X, t),
+Fij (X, t) =
+∂t
+∂t ∂Xj
+∂Xj
+∂xk
+∂Xj
+
+(23)
+
+15
+
+kinematics theory
+where the last equality comes from differentiating Equation 12. In some literature (including [Bonet and Wood, 2008] and [Klar et al., 2016]), Equation 22 is written using
+symbol F instead of f as
+DF
+= (∇v)F,
+(24)
+Ḟ = (∇v)F or
+Dt
+ 
+∂φ
+∂
+while the formula Ḟ = ∂X
+also appears. When written in such ways, F and f are
+∂t
+undistinguished and Ḟ is used for both time derivatives in the two spaces. It is fine to do
+so as long as F = F(X, t) or F = F(x, t) is clearly specified in the context. Otherwise, we
+prefer to keep using F to denote the Lagrangian one, and f for the Eulerian one to avoid
+confusion.
+Equation 23 will play an important role in deriving the discretized F update on each
+MPM particle (Section 9.4).
+
+5.5
+
+Volume and Area Change
+
+Assume there is a tiny volume dV at the material space, what is the corresponding value
+of dv in the world space? Consider dV being defined over the standard basis vectors
+e1 , e2 , e3 with dV = dL1 e1 · (dL2 e2 × dL3 e3 ), where dLi are tiny numbers, dLi = dLi ei .
+Then we have
+dV = dL1 dL2 dL3 .
+
+(25)
+
+The corresponding deformed vectors in the world space are
+dli = FdLi .
+
+(26)
+
+It can be shown that dl1 dl2 dl3 = JdL1 dL2 dL3 or dv = JdV where J = det(F).
+Given this property, for any function G(X) or g(x, t), it is very common to use the push
+forward/pull back when changing variables for integrals defined over subsets of either
+Ω0 or Ωt . That is
+Z
+Z
+g(x)dx =
+G(X)J(X, t)dX,
+(27)
+Bt
+
+B0
+
+where Bt is an arbitrary subset of Ωt , B0 is the pre-image of Bt under φ(·, t), G is the pull
+back of g and J(X, t) is the deformation gradient determinant.
+Similar analysis can be done for areas. Consider an arbitrary tiny area dS in Ω0 , denote
+the corresponding area in Ωt with ds. Assuming their normals are N and n respectively,
+dS = (dS)N,
+
+(28)
+
+ds = (ds)n.
+
+(29)
+
+16
+
+hyperelasticity
+Consider another tiny vector dL (with corresponding deformed version dl) that determines a tiny volume when combined with dS (ds), we have
+dV = dS · dL,
+
+(30)
+
+dv = ds · dl.
+
+(31)
+
+Combining this with the previous result dv = JdV, we get
+JdS · dL = ds · (FdL),
+
+(32)
+
+where we have used dl = FdL. Equation 32 needs to be true for any dL. That results in
+the relationship
+ds = F−T JdS,
+(33)
+or
+nds = F−T JNdS.
+We can then use this relation ship to write the surface integrals as
+Z
+Z
+h(x, t) · n(x)ds(x) =
+H(X) · F−T (X, t)N(X)J(X, t)dS(X)
+∂Bt
+
+∂B0
+
+(34)
+
+(35)
+
+where H : Ω0 → Rd is the pull back of h : Ωt → Rd , n(x) is the unit outward normal of
+∂Bt at x and N(X) is the unit outward normal of ∂B0 at X. These relationships are very
+useful when deriving the equations of motion.
+
+6
+
+hyperelasticity
+
+It is more natural to introduce the physical meaning of stress when deriving the governing equations (conservation of momentum) in Section 7. For now we simply introduce the fact that stress is related to strain (or deformation gradient in our case)
+through some “constitutive relationship”. The stress is a field that exists in the whole
+domain. There are multiple stress definitions available. For example, the Cauchy stress
+is σ(·, t) : Ωt → Rd×d . Discretely stress is a small tensor (matrix) at each evaluated point.
+A constitutive model relating the state (such as deformation gradient F) to the stress is
+needed for governing the material responses under deformations. For perfectly hyperelastic materials the constitutive relation is defined through the potential energy, which
+increases with non-rigid deformation from the initial state.
+In this section we focus on elastic materials as well as an inexact but practically easy-touse plastic model. The models described below have been successfully used for elastic
+objects, sand, snow, lava and many other materials in the MPM publications and movies.
+
+17
+
+hyperelasticity
+6.1
+
+First Piola-Kirchoff Stress
+
+For traditional solids, we prefer to express strain stress relationship using deformation
+gradient and first Piola-Kirchoff stress because they are more naturally expressed in the
+material space. Hyperelastic materials are those elastic solids whose first Piola-Kirchoff
+stress P can be derived from an strain energy density function Ψ(F) via
+P=
+
+∂Ψ
+.
+∂F
+
+(36)
+
+Pij =
+
+∂Ψ
+.
+∂Fij
+
+(37)
+
+With index notation, this means
+
+ψ(F) is the elastic energy density function (a scalar function) designed to penalize nonrigid F. P is discretely a small matrix with the same dimensions as F.
+Note that it is easy to relate P to the Cauchy stress σ which is sometimes more common
+in the engineering literature via
+1
+1 ∂ψ T
+σ = PFT =
+F .
+J
+det(F) ∂F
+
+(38)
+
+The material behavior is defined via the interaction of φ and the stress σ or P. For
+hyperelastic materials, the stress is a function of the change in shape, as expressed via
+the deformation gradient. Note that the motion of the material is rigid if
+φ(X, t) = R(t)X + t(t)
+
+(39)
+
+where RT R = I, det(R) = 1 and t : [0, ∞) → Rd . I.e. R is the rotation and t is the
+translation. Note that in this case, F = R. Hyperelastic materials penalize deformation
+via stress that arises from an energy that penalizes deviation of F from orthogonal. This
+can be written as
+∂Ψ
+P=
+, Ψ(F) = Ψ̃(FT F).
+(40)
+∂F
+In other words, the energy does not change (and has a minimum) if F is orthogonal.
+FT F is often denoted with C (right Cauchy-Green tensor). If the material is isotropic
+(meaning that response to deformation is material direction independent), then we can
+further simplify the energy by writing it as a function of the invariants of C:
+Ψ = Ψ̃(I1 , I2 , I3 )
+
+(41)
+
+where Ii are the coefficients of the characteristic polynomial of FT F (often called the
+isotropic invariants) as
+(42)
+
+I1 = tr(C),
+
+(43)
+
+I2 = tr(CC),
+2
+
+I3 = det(C) = J .
+
+(44)
+
+18
+
+hyperelasticity
+In graphics, it has been convenient to further write this as
+Ψ(F) = Ψ̂(Σ(F))
+
+(45)
+
+where F = UΣV T is the graphics/mechanics favored “Polar SVD” [Irving et al., 2004;
+McAdams et al., 2011; Gast et al., 2016] (where both [McAdams et al., 2011] and [Gast
+et al., 2016] release open source code for rapidly computing it). It is called “Polar SVD”
+for historical reasons. Mainly, U and V are rotations, and the Polar decomposition F =
+RS can be reconstructed via R = UV T and S = VΣV T , where R is the closest rotation to
+F [Gast et al., 2016] and S is symmetric.
+The isotropic invariants can be written in terms of the singular values so this is always
+possible. This construction of the constitutive response to deformation can be done intuitively in terms of Σ(F), however it does require differentiating the singular values as a
+function of F to get the stress (and stress derivatives) and this requires careful derivation.
+
+6.2
+
+Neo-Hookean
+
+Neo-Hookean is one of the most common nonlinear hyperelastic models for predicting
+large deformations of elastic materials. The energy density function for this model is
+
+λ
+µ
+T
+tr(F F) − d − µ log(J) + log2 (J),
+Ψ(F) =
+2
+2
+
+(46)
+
+where d = 2 or 3 denotes the problem dimension, µ and λ are related to Young’s modulus
+E and Poisson’s ratio ν via
+µ=
+
+E
+,
+2(1 + ν)
+
+λ=
+
+Eν
+.
+(1 + ν)(1 − 2ν)
+
+(47)
+
+It is easy to see that when F is a rotation, Ψ(F) = 0. For a non-inverted F (meaning
+J > 0), Ψ(F) > 0. The energy density function is adequate to describe a hyperelastic
+solid. For force computations, Equation 36 is needed to provide P as a function of F. For
+Neo-Hookean, the result is
+P = µ(F − F−T ) + λ log(J)F−T .
+
+(48)
+
+Note that ∂P
+∂F is further needed for implicit integration. We provide in Section 6.4 a
+practical way to do so.
+
+6.3
+
+Fixed Corotated Constitutive Model
+
+Another simple and widely used model that is defined from the Singular Value Decomposition (SVD) is the so called fixed corotated model. This is called “fixed" because it is a
+
+19
+
+hyperelasticity
+small modification to a commonly used model called corotated linear elasticity common
+in the computer graphics literature. Assuming the polar SVD F = UΣV T , the energy for
+fixed corotated model is
+d
+X
+λ
+Ψ(F) = Ψ̂(Σ(F)) = µ
+(σi − 1)2 + (J − 1)2
+2
+
+where of course J =
+
+(49)
+
+i=1
+
+Qd
+
+i=1 σi .
+
+Expanding the µ term in the formula we have
+!
+d
+d
+d
+X
+X
+X
+2
+2
+µ
+(σi − 1) = µ
+σi − 2
+σi + d .
+i=1
+
+i=1
+
+(50)
+
+i=1
+
+It can be shown that
+∂ X
+∂ X 2
+σi = 2F and
+σi = R
+∂F
+∂F
+d
+
+d
+
+i=1
+
+(51)
+
+i=1
+
+where F = RS is the polar decomposition of F (R a rotation matrix and S symmetric).
+This can of course be defined from the SVD of F as F = UV T VΣV T . I.e. R = UV T and
+S = VΣV T . Combining all of this, we have
+P(F) =
+
+∂ψ
+(F) = 2µ (F − R) + λ(J − 1)JF−T .
+∂F
+
+(52)
+
+The second derivatives require a bit more care but can be computed relatively easily.
+We first do it by computing differentials (which will results in δP). This will be useful
+for a matrix free implementation of the implicit solver.
+ 
+∂Ψ
+∂2 Ψ
+: δF = δ
+∂F∂F
+∂F
+
+(53)
+
+= δ(2µ(F − R) + λ(J − 1)JF−T )
+−T
+
+= 2µδF − 2µδR + λJF
+
+−T
+
+= 2µδF − 2µδR + λJF
+
+(54)
+−T
+
+δJ + λ(J − 1)δ(JF
+−T
+
+(JF
+
+(55)
+
+)
+−T
+
+: δF) + λ(J − 1)δ(JF
+
+)
+
+(56)
+
+Since JF−T is a matrix whose entries are polynomials in the entries of F, δ(JF−T ) =
+∂
+−T
+∂F (JF ) : δF can readily be computed directly. That leaves the task of computing δR.
+(57)
+
+δF = δRS + RδS
+T
+
+T
+
+(58)
+
+R δF = (R δR)S + δS
+T
+
+T
+
+T
+
+T
+
+R δF − δF R = (R δR)S + S(R δR)
+
+(59)
+
+Here we have taken advantage of the symmetry of δS and the skew symmetry of RT δR.
+There are three independent components of RT δR, which we can solve for directly. The
+equation is linear in these components, so RT δR can be computed by solving a 3 × 3
+system. Finally, δR = R(RT δR).
+
+20
+
+hyperelasticity
+6.4
+
+A Practical Differentiation Strategy for Isotropic Elasticity
+
+Here we provide a practical way (originated from [Stomakhin et al., 2012]) to compute P
+and ∂P
+∂F (either the tensor or the differential δP) for any general isotropic elastic material.
+This method will utilize a symbolic software package. We will discuss the Mathematica
+implementation. A Maple or any other version is straightforward to produce following
+the same logic. For a more thorough discussion on implementing derivative computations that happen a lot in computer graphics applications, we refer to [Schroeder, 2016].
+It is worth noting that this strategy can be used for computing other derivatives in diagonal space that looks similar to ∂P
+∂F . For example in some models, the Kirchoff stress τ
+(instead of first Piola-Kirchoff stress P) is used:
+τ = Uτ̂UT ,
+
+(60)
+
+where τ̂ is a diagonal stress measure with each entry being a function of Σ. To compute
+∂τ
+∂P
+∂F , almost exactly the same method discussed below for computing ∂F can be used.
+6.4.1 Computing P
+Let’s start with P. For an isotropic material, stress can be computed as
+F = UΣV T ,
+Ψ(F) = Ψ̂(Σ),
+P = UP̂V T .
+Here, P̂ is diagonal with entries
+
+(61)
+(62)
+(63)
+
+∂Ψ̂
+∂σi .
+
+Here is the proof for P in diagonal space (Equation 63): First, we want to show P(RF) =
+RP(F) for any rotation R. Consider any model (doesn’t even need to be isotropic), rotation after deformation shouldn’t change the energy. This means Ψ(F) = Ψ(RF). Take the
+differentials to this equation, we get
+∂Ψ
+∂Ψ
+(F) : δF =
+(RF) : δ(RF)
+∂F
+∂F
+(P(F)) : (δF) = (P(RF)) : δ(RF)
+
+δΨ =
+
+(P(F)) : (δF) = (P(RF))ij Rik δFkj
+(P(F)) : (δF) = (RT P(RF)) : δF
+P(F) = RT P(RF)
+RP(F) = P(RF)
+Similar, if we assume an isotropic material, we can use Ψ(FR) = Ψ(F) to prove P(FR) =
+P(F)R for any rotation R. Using these two qualities for P, we have
+P(F) = P(UΣV T ) = UP(Σ)V T = UP̂V T .
+
+(64)
+
+21
+
+hyperelasticity
+6.4.2 Computing ∂P/∂F or δP
+The idea is similar to the one for P. Take any two rotations R and Q, use the result for P,
+we have
+P(F) = P(RRT FQQT ) = RP(RT FQ)QT .
+(65)
+Call K = RT FQ, we have
+P(F) = RP(K)QT
+
+(66)
+
+Now take the differential (and keep in mind that R and Q should be treat as constants):
+
+
+∂P
+δP = R
+(K) : δ(K) QT
+(67)
+∂F
+
+
+∂P
+T
+(K) : (R δFQ) QT .
+(68)
+=R
+∂F
+Since R and Q are freely chosen, we choose R = U and Q = V, then K = Σ. The formula
+then becomes
+
+
+∂P
+T
+δP = U
+(Σ) : (U δFV) V T .
+(69)
+∂F
+This gives us δP. For the tensor ∂P/∂F, we adopt the index notation:
+
+
+∂P
+(δP)ij = Uik
+(Σ)
+Urm δFrs Vsn Vjl
+∂F
+klmn
+
+
+∂P
+(F)
+(δP)ij =
+δFrs
+∂F
+ijrs
+These two equations need to hold for any δF, revealing
+
+
+
+
+∂P
+∂P
+(F)
+=
+(Σ)
+Uik Urm Vsn Vjl
+∂F
+∂F
+ijrs
+klmn
+So the remaining problem is computing
+
+∂P
+∂F (Σ).
+
+(70)
+(71)
+
+(72)
+
+We show how to do it in 3D.
+
+First, we need to use Rodrigues’ rotation formula. It says any rotation matrix can be
+written in terms of a unit vector k and an rotation angle θ:
+R = I + sin(θ)K + (1 − cos(θ))K2 ,
+
+(73)
+
+where K is the skew-symmetric cross-product matrix of k. This means every rotation mar
+, θ = |r|. So, we can parametrize
+trix has only 3 degree of freedoms r1, r2, r3, then k = |r|
+rotation matrix U and V with 3 numbers for each.
+Now we have the following code for defining F in terms of s1, s2, s3, u1, u2, u3, v1, v2, v3,
+where U and V are defined by ui and vi with Rodrigues’ rotation formula, si are the
+singular values from Σ.
+
+22
+
+hyperelasticity
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+
+id= I d e n t i t y M a t r i x [ 3 ] ;
+var ={ s1 , s2 , s3 , u1 , u2 , u3 , v1 , v2 , v3 } ;
+Sigma=DiagonalMatrix [ { s1 , s2 , s3 } ] ;
+cp [ k1_ , k2_ , k3_ ] = { { 0 , − k3 , k2 } , { k3 ,0 , − k1 } , { − k2 , k1 , 0 } } ;
+vV={ v1 , v2 , v3 } ;
+vU={ u1 , u2 , u3 } ;
+nv= S q r t [ Dot [ vV , vV ] ] ;
+nu= S q r t [ Dot [vU , vU ] ] ;
+UU=cp [ u1 , u2 , u3 ]/nu ;
+VV=cp [ v1 , v2 , v3 ]/ nv ;
+U=i d+S i n [ nu ] ∗UU+(1−Cos [ nu ] ) ∗UU.UU;
+V=i d+S i n [ nv ] ∗VV+(1−Cos [ nv ] ) ∗VV.VV;
+F=U. Sigma . Transpose [V ] ;
+
+where cp is a function for generating the cross-product matrix (corresponding to computing K in Equation 73).
+From now on, we write the 3 × 3 × 3 × 3 tensor ∂P
+∂F (Σ) and any other such tensors to 9 × 9
+matrices. That means each 3 × 3 matrix is now a size-9 vector. It is easy to see the old
+∂Pij
+∂Fkl
+
+∂P
+
+is now ∂F 3(i−1)+j . We further call vector S = {s1, s2, s3, u1, u2, u3, v1, v2, v3} being the
+3(k−1)+l
+parametrization of F. Then we can apply the chain rule
+∂P
+∂S
+∂P
+(Σ) =
+(Σ) (Σ)
+∂F
+∂S
+∂F
+
+(74)
+
+Here are the Mathematica code for computing them. Note that we achieve F = Σ by
+taking the limit {u1, u2, u3, v1, v2, v3} = +, which correspond to nearly zero rotations.
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+dFdS=D[ F l a t t e n [ F ] , { var } ] ;
+dFdS0=dFdS / . { u1−>e , u2−>e , u3−>e , v1−>e , v2−>e , v3−>e } ;
+dFdS1=Li m it [ dFdS0 , e −>0, D i r e c t i o n −>−1];
+dSdF0= I n v e r s e [ dFdS1 ] ;
+Phat=DiagonalMatrix [ { t 1 [ s1 , s2 , s3 ] , t 2 [ s1 , s2 , s3 ] , t 3 [ s1 , s2 , s3 ] } ] ;
+P=U. Phat . Transpose [V ] ;
+dPdS=D[ F l a t t e n [ P ] , { var } ] ;
+dPdS0=dPdS / . { u1−>e , u2−>e , u3−>e , v1−>e , v2−>e , v3−>e } ;
+dPdS1=Li m it [ dPdS0 , e −>0, D i r e c t i o n −>−1];
+dPdF= S i m p l i f y [ dPdS1 . dSdF0 ] ;
+
+Note ’Direction->-1’ in Mathematica means taking the limit from large values to the
+small limit value. The Mathematica computation result will be given in terms of the
+singular values and P̂. One can then take the formula for implementing them in the code.
+[Stomakhin et al., 2012] gives the result where ∂P/∂F (size 9 × 9 matrix) is permuted to
+2×2
+2×2
+be a block diagonal matrix with diagonal blocks A3×3 , B2×2
+12 , B13 , B23 , where
+
+
+
+ψ̂,σ1 σ1 ψ̂,σ1 σ2 ψ̂,σ1 σ3
+A =  ψ̂,σ2 σ1 ψ̂,σ2 σ2 ψ̂,σ2 σ3 
+ψ̂,σ3 σ1 ψ̂,σ3 σ2 ψ̂,σ3 σ3
+
+(75)
+
+23
+
+hyperelasticity
+and
+
+1
+Bij = 2
+σi − σ2j
+
+
+
+σi ψ̂,σi − σj ψ̂,σj σj ψ̂,σi − σi ψ̂,σj
+σj ψ̂,σi − σi ψ̂,σj σi ψ̂,σi − σj ψ̂,σj
+
+
+.
+
+(76)
+
+The division by σ2i − σ2j is problematic when two singular values are nearly equal or
+when two singular values nearly sum to zero. The latter is possible with a convention
+for permitting negative singular values (as in invertible elasticity [Irving et al., 2004;
+Stomakhin et al., 2012]).
+Expanding Bij in terms of partial fractions yields the useful decomposition
+1 ψ̂,σi − ψ̂,σj
+Bij =
+2 σi − σj
+
+
+
+1 1
+1 1
+
+
+
+1 ψ̂,σi + ψ̂,σj
++
+2 σi + σj
+
+
+
+1 −1
+−1 1
+
+
+.
+
+(77)
+
+Note that if ψ̂ is invariant under permutation of the singular values, then ψ̂,σi → ψ̂,σj as
+σi → σj . Thus, the first term can normally be computed robustly for an isotropic model
+if implemented carefully. The other fraction has deeper implications. This term can be
+computed robustly if ψ̂,σi + ψ̂,σj → 0 as σi + σj → 0. This property is unfavorable, as it
+means the constitutive model will have difficulty recovering from many inverted configurations. Since we are usually interested in models with robust behavior under inversion,
+this term will necessarily be unbounded under some circumstances. We address this by
+clamping the magnitude of the denominator to not be smaller than 10−6 before division
+to bound the derivatives.
+For 2D, a rotation matrix is now simply paremetrized with a single θ where the reconstruction is
+
+R=
+
+cos θ − sin θ
+sin θ cos θ
+
+The 2D version of the whole Mathematica code is
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+
+id= I d e n t i t y M a t r i x [ 2 ] ;
+var ={ s1 , s2 , u1 , v1 } ;
+S=DiagonalMatrix [ { s1 , s2 } ] ;
+U= { { Cos [ u1 ] , − S i n [ u1 ] } , { S i n [ u1 ] , Cos [ u1 ] } } ;
+V= { { Cos [ v1 ] , − S i n [ v1 ] } , { S i n [ v1 ] , Cos [ v1 ] } } ;
+F=U. S . Transpose [V ] ;
+dFdS=D[ F l a t t e n [ F ] , { var } ] ;
+dFdS0=dFdS / . { u1−>e , v1−>e } ;
+dFdS1=Li m it [ dFdS0 , e −>0, D i r e c t i o n −>−1];
+dSdF0= I n v e r s e [ dFdS1 ] ;
+Phat=DiagonalMatrix [ { t 1 [ s1 , s2 ] , t 2 [ s1 , s2 ] } ] ;
+P=U. Phat . Transpose [V ] ;
+dPdS=D[ F l a t t e n [ P ] , { var } ] ;
+dPdS0=dPdS / . { u1−>e , v1−>e } ;
+dPdS1=Li m it [ dPdS0 , e −>0, D i r e c t i o n −>−1];
+dPdF= S i m p l i f y [ dPdS1 . dSdF0 ] ;
+
+
+.
+
+24
+
+hyperelasticity
+
+original rest shape
+FP
+F
+
+new rest shape
+FE
+current shape
+
+Figure 2: Multiplicative decomposition of the deformation gradient.
+
+6.5
+
+Snow Plasticity
+
+Snow constitutive behavior depends on a very wide range of complex factors. There are
+many different models used depending on the conditions of interest. Much of the dynamic behavior can be approximated with a relatively simple elasto-plastic assumption.
+We will use a simple large-strain plastic flow model combined with a hardening effect.
+We represent plasticity by factoring deformation gradient into elastic and plastic parts as
+F = FE FP .
+
+(78)
+
+The deformation gradient is a measure of how a material has locally rotated and deformed due to its motion. By factoring the deformation gradient in this way, we divide
+this deformation history into two pieces. The plastic part, FP , represents the portion of
+the material’s history that has been forgotten. If a metal rod is bent into a coiled spring,
+the rod forgets that it used to be straight; the coiled spring behaves as though it was always coiled (see Figure 2). The twisting and bending involved in this operation is stored
+in FP . If the spring is compressed slightly, the spring will feel strain (deformation). This
+is elastic deformation, which is stored in FE . The spring remembers this deformation. In
+response, the material exerts stress to try to restore itself to its coiled shape. In this way,
+we see that only FE should be used to compute stress. The full history of the metal rod
+consists of being bent into a spring shape (FP ) and then being compressed (FE ).
+The elastic response is only a function of FE . Intuitively, this states that the deformation
+in the local transition to FP is permanent. In a sense, Fp comes to represent a new local rest state of the material. This transition to permanent deformation is typically in
+response to large deformation. A simple example of this would be denting an aluminum
+can. Once dented, all elastic response will be to displacement from the dented configuration. Most models define the decomposition in response to a stress based condition.
+However, for our case it will be more intuitive to think of the constraint as defined on the
+
+25
+
+hyperelasticity
+singular values of F itself. This will give us more visual control over the plasticity effect.
+Specifically, we will enforce that the singular values σEi of FE are in [1 − θc , 1 + θs ] for
+some small constants θc and θs . This will be done with the following procedure. Given
+Fn = FnE FnP ,
+
+(79)
+
+(where the singular values σnE i of FnE satisfy the constraint of lying in [1 − θc , 1 + θs ]) and
+a new Fn+1 , we will first assume that all new deformation introduced in the transition
+from Fn to Fn+1 was elastic. That is we will first assume that given a new Fn+1 , it can be
+decomposed as
+n
+(80)
+Fn+1 = F̃n+1
+E FP .
+In so doing, this defines F̃n+1
+as
+E
+F̃n+1
+= Fn+1 (FnP )−1 .
+E
+
+(81)
+
+In practice it is often more convenient to store FE and FP instead of storing the full F. The
+tentative update of F can then be applied to FE directly to give F̃n+1
+E . The next step is to
+n+1
+enforce the constraint that the singular values σ̃n+1
+of
+F̃
+satisfy
+the constraint of lying
+Ei
+E
+in [1 − θc , 1 + θs ]. That is, we define
+n+1
+σn+1
+Ei = clamp(σ̃Ei , 1 − θc , 1 + θs ), i = 1, . . . , d
+
+(82)
+
+Now, assuming the singular value decomposition of F̃n+1
+is
+E
+T
+
+n+1
+F̃n+1
+= Un+1
+,
+E
+E Σ̃E VE
+
+(83)
+
+we can define Fn+1
+from the clamped singular values Σn+1
+as
+E
+E
+T
+
+n+1 n+1
+Fn+1
+= Un+1
+.
+E
+E ΣE VE
+
+(84)
+
+Of course with this definition of FEn+1 we still need to maintain the same decomposition
+of F so we would need to determine a new Fn+1
+such that
+P
+n+1
+Fn+1 = Fn+1
+E FP .
+
+(85)
+
+But of course, given that we know Fn+1 and Fn+1
+E , the new plastic component of the
+deformation gradient is
+
+−1
+n+1
+n+1
+FP = FE
+Fn+1 .
+(86)
+Snow will tend to get more rigid under compression. This phenomenon is often called
+hardening. We use a simple modification to our constitutive model to add this effect.
+Specifically, we let the Lame coefficients µ and λ increase under compression and decrease under extension. The reduction in material strength under extension facilitates
+break-up and fracture of the snow. This is an important property for a wide range of
+visual phenomena. We quantify this hardening effect as
+µ(FP ) = µ0 eξ(1−JP ) , λ(FP ) = λ0 eξ(1−JP )
+
+(87)
+
+26
+
+governing equations
+where µ0 and λ0 are the Lame parameters as set from the original Young’s modulus and
+Poisson ratio. ξ is a hardening parameter that we typically use something between 3 and
+10. Also, JP = det (FP ). It is also important to include some safeguards to prevent µ and
+λ becoming too large. This can be simply done by requiring a numerical clamping bound
+on ξ(1 − JP ).
+It can also be seen from the derivation that instead of storing Fp , keeping track of Jp is
+enough as long as we know how to get F̃n+1
+from the time n quantities. For MPM this is
+E
+indeed the case.
+This hardening model is designed with the intuition that when snow is stretched, it
+becomes softer (to allow fracture). When it is compressed, it becomes stiffer like packing
+a snow ball. The rule in Equation 87 is just an empirical formula. Being creative on the
+rules will help produce more versatile and artistic material behaviors.
+A more rigorously derived plasticity model needs to obey the second law of thermodynamics as well as enforcing JP = 1 (plasticity deformation should not change the material
+volume). We refer to the technical document of [Klar et al., 2016] for a more thorough
+discussion on this matter.
+
+7
+
+governing equations
+
+The governing equations of interest are conservation of mass and conservation of momentum. We’ll list the result below and provide their derivations in Section 7.1 and 7.2.
+We further derive the weak form of the force balance in Section 7.3. The weak form is
+essential for deriving the final temporal and spatial discretization of the equations in
+Section 9. It is recommended to review Section 5 before looking into the derivations.
+∂Φ(X,t)
+
+∂x(X,t)
+
+Letting V(X, t) = ∂t = ∂t be the velocity defined over X, the Lagrangian view of
+the equations are [Gonzalez and Stuart, 2008]
+R(X, t)J(X, t) = R(X, 0) Conservation of mass,
+∂V
+R(X, 0)
+= ∇X · P + R(X, 0)g Conservation of momentum,
+∂t
+
+(88)
+(89)
+
+where X ∈ Ω0 ,t > 0. Here R is the Lagrangian mass density which is related to the more
+commonly used Eulerian mass density ρ as R(X, t) = ρ(Φ(X, t), t). Note that the mass
+∂
+(R(X, t)J(X, t)) = 0.
+conservation can also be written as ∂t
+In Eulerian view, the governing equations are
+D
+ρ(x, t) + ρ(x, t)∇x · v(x, t) = 0 Conservation of mass,
+Dt
+Dv
+ρ(x, t)
+= ∇x · σ + ρ(x, t)g Conservation of momentum,
+Dt
+
+(90)
+(91)
+
+27
+
+governing equations
+where v = v(x, t) is the Eulerian velocity,
+
+D
+Dt
+
+=
+
+∂
+∂t
+
++ v · ∇x is the material derivative.
+
+As shown in the conservation of momentum, it is more convenient to use the first PiolaKirchoff stress P in the Lagrangian view, and the Cauchy stress σ in the Eulerian view.
+
+7.1
+
+Conservation of Mass
+
+Let ρ(x, t) be the Eulerian mass density and let R(X, t) be the Lagrangian counterpart
+(pull back), we have the relationship
+(92)
+
+R(X, t) = ρ(φ(X, t), t)
+−1
+
+ρ(x, t) = R(φ (x, t), t).
+
+(93)
+
+We can think of ρ to be naturally defined over Ωt as
+mass(Bt )
+R
+→+0
+Bt dx
+
+ρ(x, t) = lim
+
+(94)
+
+
+
+where Bt is the ball of radius  surrounding an arbitrary x ∈ Ωt . This is arguably
+a natural definition since mass(Bt ) should be a measurable quantity. Conservation of
+mass can be expressed as
+Z
+Z
+Z
+t
+R(X, 0)dX = mass(B0 )
+(95)
+R(X, t)JdX =
+ρ(x, t)dx =
+mass(B ) =
+Bt
+
+B0
+
+B0
+
+for all Bt ⊂ Ωt (as before, B0 is the pre-image of Bt under φ(·, t)). The second equality
+comes from using the change of variable result from Section 5.5.
+This just says that the mass in Bt (as expressed via an integral of the mass density) should
+not change with time. This set is associated with a subset of the material at time t and as
+it evolves in the flow, the material will take up more or less space, but there will never
+be more or less material in the set. Since Bt is arbitrary, it must be true that
+R(X, t)J(X, t) = R(X, 0), ∀X ∈ Ω0 , t > 0.
+
+(96)
+
+Note that J(X, 0) = 1. Alternatively, mass conservation can be written as
+∂
+(R(X, t)J(X, t)) = 0.
+∂t
+
+(97)
+
+To switch to the Eulerian view, we first notice that
+
+Also,
+
+∂
+∂R
+∂J
+(RJ) =
+J+R .
+∂t
+∂t
+∂t
+
+(98)
+
+∂J
+∂J ∂Fij
+∂Vi
+∂vi
+∂vi
+∂vi
+=
+= JF−1
+= JF−1
+Fkj = Jδik
+=J
+,
+ji
+ji
+∂t
+∂Fij ∂t
+∂Xj
+∂xk
+∂xk
+∂xi
+
+(99)
+
+28
+
+governing equations
+where we have used the determinant differentiation rule
+∂J
+= JF−T .
+∂F
+
+(100)
+
+Combining Equation 97, 98 and 99, we get
+∂R
+∂vi
+J + RJ
+= 0.
+∂t
+∂xi
+
+(101)
+
+Pushing forward on both sides result in the Eulerian view of conservation of mass:
+D
+ρ(x, t) + ρ(x, t)∇ · v(x, t) = 0, ∀x ∈ Ωt , t > 0.
+Dt
+
+7.2
+
+(102)
+
+Conservation of Momentum
+
+Continuum forces are classified as either body forces (e.g. gravity) or surface forces
+(stress-based). Stress-based forces are first defined via a traction field whose existence
+we will assume. The force per area (or traction) field t(·, n, t) : Ωt → Rd is defined via
+the relation
+Z
+t
+t(x, n(x))ds(x)
+(103)
+forceS (B ) =
+∂Bt
+
+where forceS (Bt ) is the net force on an arbitrary Bt exerted from material on the other
+side of ∂Bt on material inside Bt . That is, t(x, n, t) is the force per unit area(d =
+3)/length(d = 2) that material in the n+ side of the material at the point x exerts on
+material on the n− side. It can be shown that this implies the existence of a stress field
+(Cauchy stress) σ(·, t) : Ωt → Rd×d with
+t(x, n, t) = σ(x, t)n.
+
+(104)
+
+Let v be the Eulerian velocity (with Lagrangian counterpart V). Then conservation of
+momentum is expressed as
+Z
+Z
+Z
+d
+d
+ρ(x, t)v(x, t)dx =
+R(X, t)V(X, t)JdX =
+R(X, 0)A(X, t)dX
+dt Bt
+dt B0
+B0
+Z
+Z
+=
+σnds(x) +
+fext dx
+(105)
+∂Bt
+
+Bt
+
+for all Bt ⊂ Ωt in the time t configuration of the material. Here we have added the
+contribution of external body force (such as gravity) fext to the change of momentum.
+fext represents the external body force per unit volume. Therefore the rate of change of
+the momentum in Bt is equal to the net force on Bt as expressed via the Cauchy stress
+field plus the external force. It can also be shown that σ(x, t) must be symmetric for
+conservation of angular momentum [Bonet and Wood, 2008].
+
+29
+
+governing equations
+The last equality of Equation 105 can also be written as
+Z
+Z
+Z
+R(X, t)J(x, t)A(X, t)dX =
+σnds(x) +
+B0
+
+∂Bt
+
+fext (x, t)dx.
+
+Bt
+
+(106)
+
+Pushing forward the volume integral on the left side of Equation 106 results in both sides
+over Bt :
+Z
+Z
+Z
+Z
+Z
+ext
+x
+ρ(x, t)a(x, t)dx =
+σnds(x) +
+f dx =
+∇ · σdx +
+fext dx,
+(107)
+Bt
+
+∂Bt
+
+Bt
+
+Bt
+
+Bt
+
+or
+ρa = ∇x · σ + fext , ∀x ∈ Ωt , t > 0.
+
+(108)
+
+Alternatively, we can also choose to pull back the right side of Equation 106 using
+Z
+Z
+J(X, t)σ(φ(X, t), t)F−T (X, t)Nds(X).
+(109)
+σ(x, t)nds(x) =
+∂Bt
+
+∂B0
+
+Recall the first Piola Kirchoff stress is related to the Cauchy stress as P = JσF−T , we get
+Z
+Z
+Z
+∇x · P(X, t)dX.
+(110)
+P(X, t)Nds(X) =
+σ(x, t)nds(x) =
+∂Bt
+
+B0
+
+∂B0
+
+Compare this with Equation 106 we get the Lagrangian form of conservation of momentum:
+Z
+Z
+Z
+x
+R(X, 0)A(X, t)dX =
+∇ · P(X, t)dX +
+Fext J(X, t)dX
+(111)
+B0
+
+B0
+
+B0
+
+or
+R(X, 0)A(X, t) = ∇x · P(X, t) + Fext (X, t)J(X, t), ∀X ∈ Ω0 , t > 0
+
+(112)
+
+where Fext is the pull back of the Eulerian body force per unit volume fext .
+
+7.3
+
+Weak Form
+
+MPM is like the FEM discretization of the stress based forces over the Eulerian grid. It
+therefore uses the weak form of force balance. We can think of it as Lagrangian. Let’s
+ignore the external force for simplicity. We can start with the conservation of momentum
+R(X, 0)A(X, t) = ∇x · P(X, t), ∀X, t,
+
+(113)
+
+R0 Ai = Pij,j , ∀X, t,
+
+(114)
+
+or
+
+30
+
+material particles
+where R0 = R(X, 0). So for an arbitrary function Q(·, t) : Ω0 → Rd , let’s compute the dot
+product to Equation 113 and integrate over Ω0 to generate the weak form:
+Z
+Z
+Qi (X, t)R(X, 0)Ai (X, t)dX =
+Qi (X, t)Pij,j (X, t)dX
+(115)
+0
+Ω0
+Ω
+Z 
+
+
+=
+Qi (X, t)Pij (X, t) ,j − Qi,j (X, t)Pij (X, t) dX (116)
+0
+ZΩ
+=
+Qi (X, t)Pij (X, t)Nj (X, t)ds(X)
+0
+∂Ω
+Z
+−
+Qi,j (X, t)Pij (X, t)dX.
+(117)
+Ω0
+
+The quantity Pij Nj would be specified as a boundary condition. If we let T (X, t) be the
+boundary force per unit reference area with Ti = Pij Nj , then we can say that force balance
+implies that ∀Q(·, t) : Ω0 → Rd
+Z
+Z
+Z
+Qi (X, t)R(X, 0)Ai (X, t)dX =
+Qi Ti ds(X) −
+Qi,j Pij dX .
+(118)
+Ω0
+
+∂Ω0
+
+Ω0
+
+For MPM, the stress derivatives will be discretized in the current configuration, so we
+can push the stress involving integrals to the Eulerian view. Let q be the push forward
+of Q with Q(X, t) = q(φ(X, t), t) and q(x, t) = Q(φ−1 (x, t), t), we have
+Qi,j =
+
+∂Qi
+∂qi ∂xk
+=
+= qi,k Fkj .
+∂Xj
+∂xk ∂Xj
+
+(119)
+
+Further more, recall that
+
+1
+σik = Pij Fkj ,
+J
+and define t to be the external force per unit area in the Eulerian configuration (t is the
+push forward of T ), Equation 118 becomes
+Z
+Z
+Z
+qi (x, t)ρ(x, t)ai (x, t)dx =
+qi ti ds(x) −
+qi,k σik dx ,
+(120)
+t
+t
+t
+Ω
+
+∂Ω
+
+Ω
+
+where we have pushed forward the volume and surface integrals using the rules described in Section 5.5. Force balance implies the above holds for an arbitrary q(·, t) :
+Ωt → Rd . We call Equation 120 the weak form of force balance in the Eulerian view. The
+MPM discretization on the grid will be based on this equation.
+
+8
+
+material particles
+
+Before discretizing the weak form of the force balance (Equation 120), let’s first introduce
+the material particles (or material points, Lagrangian particles, etc. ) that represents the
+material simulated with MPM.
+
+31
+
+material particles
+Recall that the material point method is Lagrangian in the sense that we track actual
+particles of material. That is we keep track of mass (mp ), velocity (vp ) and position (xp )
+for a collection of material particles p. However, all stress based forces are computed on
+the Eulerian grid, so we have to transfer the material state to the Eulerian configuration
+to incorporate the effects of material forces. Then, we transfer these effects back to the
+material particles and move them in the normal Lagrangian way. The Lagrangian nature
+makes advection very trivial compared to pure Eulerian methods (such as grid-based
+fluid simulation).
+Just like any other PIC/FLIP solvers, MPM solves the governing equation on a background Eulerian grid. The grid acts as a scratch pad. It can be destroyed after each solve
+and reinitialized in the beginning of the next time step. In practice, it is easy to just use
+a fixed Cartesian grid.
+
+8.1
+
+Eulerian Interpolating Functions
+
+In each time step of MPM, particles transfer their mass and momentum to the grid nodes.
+After the grid solve, velocities are transferred back to particles for them to perform the advection step. Both transfers require interpolation functions. Taking a Finite Element view,
+the Eulerian grid is the essential computational mesh while particles act as quadrature
+points. Therefore, instead of thinking of the interpolation function as a particle ‘kernel’
+as in SPH, it is more natural (but not necessarily) to let the interpolation functions be
+defined over grid nodes.
+We can denote the interpolation function at grid node i with Ni (x). Note that i is bold
+here because it is usually a multi-index for grid nodes. Specifically, i = (i, j) in 2D,
+i = (i, j, k) in 3D. When Ni (x) is evaluated at a particle location xp , a shorter notation
+Ni (xp ) = wip is often used instead. Intuitively, we are associating with each particle
+p and grid node i a weight wip which determines how strongly the particle and node
+interact. If the particle and grid node are close together, the weight should be large. If
+the particle and node are farther apart, the weight should be small.
+We use dyadic products of one-dimensional interpolation functions as our grid basis
+functions as in [Steffen et al., 2008]
+1
+1
+1
+(121)
+Ni (xp ) = N( (xp − xi ))N( (yp − yi ))N( (zp − zi )),
+h
+h
+h
+where i = (i, j, k) is the grid index, xp = (xp , yp , zp ) is the evaluation position, h is the
+grid spacing, xi = (xi , yi , zi ) is the grid node position. For more compact notation, we
+will use wip = Ni (xp ) and ∇wip = ∇Ni (xp ). While writing them like these, one should
+keep in mind both Ni and ∇Ni are still functions of arbitrary x. When writing with w, it
+means these functions are evaluated at x = xp .
+Choosing a kernel N leads to trade offs with respect to smoothness, computational efficiency, and the width of the stencil. We prefer tensor product splines for their compu-
+
+32
+
+material particles
+tational efficiency, as they are relatively inexpensive to compute, differentiate, and store.
+The multi-linear kernel typically employed for FLIP fluid solvers is the simplest of these
+options, but it is not suitable here. There are two reasons for this (see [Steffen et al.,
+2008]). The first is that ∇wip would be discontinuous and produce discontinuous forces.
+The second is that ∇wip may be far from zero when wip ≈ 0, leading to large forces being
+applied to grid nodes with tiny weights. MPM typically requires C1 continuity of the
+interpolation function to prevent the so called cell-crossing instability. In practice, either
+quadratic B splines or cubic B splines may be used. Quadratic B splines is more computational efficient and memory saving due to a smaller transfer stencil. Cubic B splines on
+the other hand, is more expensive but provides wider coverage, therefore less sensitive
+to numerical errors such as numerical fracture when they are not desired artistic effects.
+The cubic kernel is defined with
+
+1 3
+
+|x| − |x|2 + 32 0 6 |x| < 1
+
+2
+N(x) = 61 (2 − |x|)3
+(122)
+1 6 |x| < 2
+
+
+
+0
+2 6 |x|
+where h is the grid spacing. The quadratic kernel is also useful:
+
+3
+− |x|2
+0 6 |x| < 21
+
+
+4
+2 1
+3
+N(x) = 21 32 − |x|
+2 6 |x| < 2
+
+
+
+3
+0
+2 6 |x|
+
+(123)
+
+The quadratic and cubic kernels are shown in Figure 3. Though theoretically unstable,
+linear interpolation functions may still work for certain applications in practice. It is
+
+1 − |x| 0 6 |x| < 1
+N(x) =
+(124)
+0
+1 6 |x|
+Computing the gradient is done similarly by differentiating the one dimensional functions:
+ 1 0 1
+
+1
+1
+h N ( h (xp − xi ))N( h (yp − yi ))N( h (zp − zi ))
+∇Ni (xp ) =  N( h1 (xp − xi )) h1 N 0 ( h1 (yp − yi ))N( h1 (zp − zi )) 
+N( h1 (xp − xi ))N( h1 (yp − yi )) h1 N 0 ( h1 (zp − zi ))
+where N 0 (x) is the derivative of N(x).
+
+8.2
+
+Eulerian/Lagrangian Mass
+
+When representing our material as a finite collection of points, we can assign each point
+a subset (B0∆x,p ⊂ Ω0 ) of the total material. In this way, we can define the mass of that
+particle to be
+Z
+mnp =
+
+n
+Bt∆x,p
+
+ρ(x, tn )dx.
+
+(125)
+
+33
+
+material particles
+
+N̂ (x)
+
+Figure 3: Cubic (blue) and quadratic (red) splines used for computing interpolation weights.
+
+With this convention, we can define the following conservative process for transferring
+mass and momentum (and then velocity) to the nodes of the Eulerian grid. Define
+X
+mi =
+mp Ni (xp )
+(126)
+p
+
+as the mass of Eulerian grid node i. With this convention, we have
+X
+XX
+X
+X
+X
+mi =
+mp Ni (xp ) =
+mp
+Ni (xp ) =
+mp
+i
+
+i
+
+p
+
+p
+
+i
+
+(127)
+
+p
+
+by the partition of unity assumption on the Ni .
+
+8.3
+
+Eulerian/Lagrangian Momentum
+
+Similarly, we can transfer particle momentum mp vp as (note that we will eventually use
+a different transfer called APIC described in Section 10.1)
+X
+(mv)i =
+mp vp Ni (xp )
+(128)
+p
+
+and we can show that
+
+X
+
+(mv)i =
+
+X
+
+mp vp
+
+(129)
+
+p
+
+i
+
+by the same partition of unity logic. The Eulerian velocity vi is defined as
+vi =
+
+(mv)i
+.
+mi
+
+Note that in this case, the repeated index does not imply summation.
+
+(130)
+
+34
+
+discretization
+8.4
+
+Eulerian to Lagrangian Transfer
+
+The transfer from Eulerian variables to Lagrangian variables is similar. However, we
+never need to transfer mass from the grid to the particles since Lagrangian particle mass
+never changes. Velocity is simply interpolated as
+X
+vi Ni (xp ).
+(131)
+vp =
+i
+
+It is easily verified that this conserves momentum as
+X X
+X
+X
+X
+X
+vi
+mi vi .
+vi Ni (xp ) =
+mp Ni (xp ) =
+mp vp =
+mp
+p
+
+9
+
+p
+
+p
+
+i
+
+i
+
+(132)
+
+i
+
+discretization
+
+9.1 Discrete Time
+We will start by assuming we are at time tn . Recall that the weak forms of the force
+balance equation (Equation 118 and 120) imply
+Z
+Z
+Z
+qi,k σik dx
+(133)
+qi ti ds(x) −
+Qi R0 Ai dX =
+∂Ωt
+
+Ω0
+
+n
+
+Ωt
+
+n
+
+n
+n
+n
+for all q(x,
+ t ) (or Q(X,
+ t )). We start by replacing the Lagrangian acceleration Ai (X, t )
+n
+
+1
+Vin+1 − Vin . We can then push the left hand side forward from Ω0 to Ωt to
+with ∆t
+obtain
+Z
+
+
+1
+qi (x, tn )ρ(x, tn ) vin+1 (x) − vni (x) dx
+∆t Ωtn
+Z
+Z
+n
+n
+=
+qi (x, t )ti (x, t )ds(x) −
+qi,k (x, tn )σik (x, tn )dx.
+(134)
+∂Ωt
+
+n
+
+Ωt
+
+n
+
+tn
+
+n
+
+Note that with this notation vn : Ω → Rd , vn+1 : Ωt → Rd (both of them are defined
+n
+for x ∈ Ωt ). Therefore vn+1
+(x) = Vi (φ−1 (x, tn ), tn+1 ) and vni (x) = Vi (φ−1 (x, tn ), tn ).
+i
+We should keep in mind that all the i and k subscripts in Equation 134 are component
+index for dimensions. I.e., i = 1, 2, 3 for 3D and i = 1, 2 for 2D. When we are going
+discrete in space, we probably want to use indices like i, j, k to denote a grid node. To
+avoid confusion, from now on, we can require Greek letters like α, β, γ to denote the
+component index. This results in rewriting Equation 134 as
+Z
+
+
+1
+n
+qα (x, tn )ρ(x, tn ) vn+1
+(x)
+−
+v
+(x)
+dx
+α
+α
+∆t Ωtn
+Z
+Z
+n
+n
+=
+qα (x, t )tα (x, t )ds(x) −
+qα,β (x, tn )σαβ (x, tn )dx,
+(135)
+∂Ωt
+
+n
+
+Ωt
+
+n
+
+35
+
+discretization
+where α, β = 1, 2, .., d and d is the problem dimension (2 or 3). Now qiα means the α
+component of the vector quantity q that is stored at node i. Also, qα (x, t) means the α
+component of the field q(x, t).
+
+9.2
+
+Discrete Space
+
+We can do an FEM style discretization of the spatial terms by replacing qα , vnα and vn+1
+α
+with grid based interpolants as
+X
+qα (x, tn ) =
+qiα (tn )Ni (x),
+(136)
+i
+
+vnα (x) =
+
+X
+
+vnjα Nj (x),
+
+(137)
+
+vn+1
+jα Nj (x)
+
+(138)
+
+j
+
+vn+1
+α (x)
+
+=
+
+X
+j
+
+or
+qnα = qniα Ni , vnα = vnjα Nj , vαn+1 = vn+1
+jα Nj
+
+(139)
+
+for short where summation is implied on the repeated index. Force balance (Equation
+135) can then be viewed as
+Z
+Z
+1
+1
+n
+n n+1
+q Ni (x)ρ(x, t )vjα Nj (x)dx −
+qn Ni (x)ρ(x, tn )vnjα Nj (x)dx
+∆t Ωtn iα
+∆t Ωtn iα
+Z
+Z
+n
+n
+qniα Ni,β (x)σαβ (x, tn )dx.
+(140)
+qiα Ni (x)tα (x, t )ds(x) −
+=
+∂Ωt
+
+n
+
+Ωt
+
+n
+
+for all qiα . This can also be expressed as
+qniα δαβ
+
+Z
+=
+
+n
+∂Ωt
+
+mnij
+
+vn+1
+jβ
+
+∆t Z
+qniα Ni tα ds(x) −
+
+− qniα δαβ
+
+n
+Ωt
+
+where
+
+mnij
+∆t
+
+vnjβ
+
+qniα Ni,β σαβ dx.
+
+(141)
+
+Z
+mnij
+
+=
+
+n
+Ωt
+
+Ni (x)ρ(x, tn )Nj (x)dx
+
+defines the mass matrix. We can pull it back to the material space to get
+Z
+X
+n
+mij =
+Ni (x(X))R(X, 0)Nj (x(X))dX ≈
+mp Ni (xp )Nj (xp ).
+Ω0
+
+(142)
+
+(143)
+
+p
+
+P
+It is symmetric positive semi-definite because it can be written as BBT (mij = p Bip Bjp )
+√
+where Bip = mp Nip so that zT Mz > 0 for any z. In practice we can not use this
+
+36
+
+discretization
+mass matrix because it may be singular. We’ll see below a “mass lumping” strategy to
+approximate the mass matrix with a diagonal and positive definite matrix while keeping
+consistent with the particle-grid transfers.
+Equation 141 must be true for all choices of qniα . So if we choose them to be
+qniα =
+
+1, α = α̂ and i = î
+0, otherwise
+
+Z
+ Z
+X mîj 
+n+1
+n
+vjα̂ − vjα̂ =
+Nî tα̂ ds(x) −
+Nî,β σα̂β dx.
+n
+n
+∆t
+∂Ωt
+Ωt
+
+then
+
+(144)
+
+j
+
+This can be seen as a discrete force balance equation for the î, α̂ degree of freedom on
+the grid. We will next show that it can be used as an explicit update rule for the Eulerian
+momentum and that the right hand side can be thought of as the α̂th component of the
+force on the îth Eulerian grid node.
+As we just mentioned, it is often convenient (though less accurate) to use a mass lumping
+simplification. It is done by replacing the rows in mij with the corresponding row sum,
+thus making it a diagonal matrix. The row sums (let’s call it m̂i for row i) are
+Z
+XZ
+X
+n
+m̂i =
+Ni (x)ρ(x, t )Nj (x)dx =
+Ni (x)ρ(x, tn )
+Nj (x)dx
+Z
+=
+
+j
+
+n
+Ωt
+
+Ωt
+
+n
+
+Ωt
+
+n
+
+j
+
+Ni (x)ρ(x, tn )(x)dx.
+
+(145)
+
+We can also use the following approximation (similarly to what we did in Equation 143)
+Z
+Z
+X
+n
+Ni (x)ρ(x, t )dx =
+Ni (x(X))R(X, 0)dX ≈
+Ni (xp )mp
+(146)
+Ωt
+
+n
+
+Ω0
+
+p
+
+since mp ≈ Vp0 R(Xp , 0). In other words m̂i can naturally be approximated as mi .
+Rewriting mi vni as the momentum (mv)ni , we can summarize the discretization as
+
+
+n+1
+n
+(mv)iα − (mv)iα
+∆t
+
+Z
+
+Z
+n
+
+=
+∂Ωt
+
+n
+
+Ni (x)tα (x, t )ds(x) −
+
+Ωt
+
+n
+
+Ni,β (x)σαβ (x, tn )dx .
+
+(147)
+
+In other words, since the left hand side is the change in momentum, the right hand side
+is approximately the force. Here we have assumed that we have an estimate of the stress
+n n
+n
+σn
+p ≈ σ(xp , t ) at each Lagrangian particle xp , thus
+Z
+X
+Ni,β (x)σαβ (x, tn )dx ≈
+σp nαβ Ni,β (xnp )Vpn
+(148)
+Ωt
+
+n
+
+p
+n
+
+where Vpn is the volume of Bt∆x,p , or the volume particle p occupies at time tn .
+
+37
+
+discretization
+9.3
+
+Estimating the Volume
+
+We can estimate Vpn with two ways. First, recall that
+mp ≈ R(Xp , 0)Vp0 ≈ ρ(xnp , tn )Vpn .
+
+(149)
+
+We can then approximate ρ(xnp , tn ) from mni as
+ρni
+
+mni
+
+,
+∆xd
+X
+ρni Ni (xnp ).
+ρ(xnp , tn ) ≈
+=
+
+(150)
+(151)
+
+i
+
+Therefore
+Vpn ≈ P
+
+mp
+mn
+i
+n
+i ∆xd Ni (xp )
+
+=P
+
+mp ∆xd
+.
+n
+n
+i mi Ni (xp )
+
+(152)
+
+Another approach is given as follows. If we have an approximation of the deformation
+at each Lagrangian particle: Fnp ≈ F(Xp , tn ) (which we will usually need for an elastic
+material), then you can approximate Vpn using Jnp = det(Fnp ). Specifically, if we assume
+R
+we know the initial volume Vp0 = B0 dx, then
+∆x,p
+
+Vpn ≈ Vp0 Jnp .
+
+(153)
+
+If we use the formula for the first Piola Kirchoff stress σ =
+rewrite Equation 147 and 148 in terms of P instead of σ:
+X
+
+σp nαβ Ni,β (xnp )Vpn =
+
+p
+
+1
+T
+J PF
+
+then we can further
+
+X
+X 1
+n
+0 n
+n
+n
+N
+(x
+)V
+J
+=
+Ppn αγ Fnp βγ Ni,β (xnp )Vp0 .
+F
+P
+p p
+n p αγ p βγ i,β p
+J
+p
+p
+p
+
+(154)
+
+This is the formula that will be more useful in practice because most of our constitutive
+models are expressed in terms of P. Now,
+
+
+n
+(mv)n+1
+(mv)
+−
+iα
+iα
+∆t
+
+Z
+=
+
+n
+∂Ωt
+
+Ni (x)tα (x, tn )ds(x) −
+
+X
+
+Ppn αγ Fnp βγ Ni,β (xnp )Vp0 .
+
+(155)
+
+p
+
+We will next discuss how to approximate the deformation gradient (Fnp ) at each Lagrangian point (xnp ).
+
+9.4
+
+Deformation Gradient Evolution
+
+In order to continue the discussion of time stepping schemes, we need to consider the
+constitutive model. So far, the results hold independent of the type of material. We
+
+38
+
+discretization
+will generally consider models where the stress depends primarily on the change of
+shape in the material as expressed via the deformation gradient (this includes all models
+discussed in Section 6). Next, we will discuss how this can be computed in the MPM
+context. The deformation gradient is more difficult to compute for Eulerian methods (or
+Lagrangian methods where there is no mesh, e.g. particle methods). However, we can
+use the equation (recall the result from Section 5.4)
+∂v
+∂
+F(X, t) =
+(φ(X, t), t)F(X, t)
+∂t
+∂x
+
+(156)
+
+to update (or evolve) a deformation gradient on each material particle by discretizing
+over the Eulerian grid.
+
+∂v
+∂x
+
+Now let’s reformulate a similar rule discretely. We assume we have the velocity (den
+fined over Ωt ) at time tn+1 as a a function of x only. Specifically, we consider the
+n
+function vn+1 : Ωt → Rd defined as vn+1 (x) = V(φ−1 (x, tn ), tn+1 ) and also of course
+vn+1 (φ(X, tn )) = V(X, tn+1 ). (We have used the same definition in Section 9.1.) With this
+we have
+∂
+∂V
+∂vn+1
+F(X, tn+1 ) =
+(X, tn+1 ) =
+(φ(X, tn ))F(X, tn ).
+(157)
+∂t
+∂X
+∂x
+This is useful because if we further use the approximation
+Fn+1
+− Fnp
+∂
+p
+n+1
+F(Xp , t ) ≈
+∂t
+∆t
+then
+Fn+1
+p
+
+=
+
+Fnp
+
+∂vn+1 n n
+(xp )Fp =
++ ∆t
+∂x
+
+(158)
+
+
+
+∂vn+1 n
+(xp ) Fnp
+I + ∆t
+∂x
+
+and of course if we use the grid based interpolation formula for vn+1 , i.e.,
+X
+vn+1 (x) =
+vn+1
+Ni (x),
+i
+
+(159)
+
+(160)
+
+i
+
+∂vn+1
+∂x
+
+(x) =
+
+X
+
+vn+1
+i
+
+
+
+i
+
+∂Ni
+(x)
+∂x
+
+T
+,
+
+(161)
+
+then we have
+=
+Fn+1
+p
+
+I + ∆t
+
+X
+i
+
+vn+1
+i
+
+
+
+∂Ni n
+(x )
+∂x p
+
+T !
+
+Fnp
+
+(162)
+
+as the update rule for Fn+1
+given the vn+1
+and Fnp .
+p
+i
+
+9.5
+
+Forces as Energy Gradient
+
+The elastic response can be shown to arise from an elastic potential energy. This is true
+for both the continuous and discrete cases. For the discrete case, consider x̂i defined to
+
+39
+
+discretization
+be the nodes of the Eulerian grid when x̂i = xi . In other words, consider temporarily
+that we have allowed the nodes of the Eulerian grid to move with a variable defined as
+x̂i denoting the imaginary moved node position. We can then temporarily think of these
+x̂i as new Lagrangian degrees of freedom. It is like saying that we switched from having
+the Xp as our Lagrangian particles and switched over to Xi = φ−1 (xi , tn ) as our new
+Lagrangian particles and with this we say that xn+1
+= φ(Xi , tn+1 ) = x̂i defines the new
+i
+configuration of our material. If we keep this idea in mind, we can show that the forces
+derived in Section 9.2 are related to a discrete potential energy in the case of a certain
+class of elastic materials. For hyperelastic materials where the first Piola Kirchoff stress
+is related to an elastic potential energy density ψ via
+∂ψ
+(F)
+∂F
+
+P(F) =
+
+(163)
+
+as we saw in Section 6, we can define the total potential energy (as a function of the
+moved node positions x̂ as
+X
+e(x̂) =
+ψ(Fp (x̂))Vp0
+(164)
+p
+
+where x̂ is the full (assembled) vector of all Eulerian x̂i . Here we think of the deformation
+gradient as a function of x̂. This is because we are temporarily thinking of the motion
+of the material as defined in terms of the Xi = φ−1 (xi , tn ) and x̂i . Really, this is an
+equivalent notion to letting motion be defined via the vn+1
+. Specifically we can think of
+i
+them defined as
+x̂ − xi
+vn+1
+= i
+or x̂i = xi + ∆tvn+1
+.
+(165)
+i
+i
+∆t
+This leads to the particle wise deformation gradient formula of
+X  x̂jβ − xjβ  X
+n
+Fp βγ (x̂) = Fp βγ + ∆t
+(166)
+Nj,τ (xnp )Fnp τγ .
+∆t
+τ
+j
+
+If we differentiate the energy with respect to x̂iα (the αth component of x̂i ) we get
+XX
+∂Fp βγ
+∂e
+(x̂) =
+Pβγ (Fp (x̂))
+(x̂)Vp0 .
+∂x̂iα
+∂x̂
+iα
+p
+
+(167)
+
+β,γ
+
+From the formula for the deformation gradient above, we can see that
+∂Fp βγ
+∂x̂iα
+
+(x̂) = δαβ
+
+X
+
+Ni,τ (xnp )Fnp τγ
+
+(168)
+
+τ
+
+and if we plug this into Equation 167 we get
+X
+∂e
+Pαγ (Fp (x̂))Fnp τγ Ni,τ (xnp )Vp0 .
+(x̂) =
+∂x̂iα
+p
+
+(169)
+
+40
+
+explicit time integration
+Therefore, comparing with the result in Section 9.3, we can see that the force on the
+Eulerian grid node i is
+
+
+
+x0
+∂e 
+
+
+(170)
+−
+x̂ =  x1  .
+∂x̂iα
+..
+.
+In other words, we can write the momentum update as
+
+x0
+Z
+∂e 
+ x 
+n
+Ni (x)tα (x, tn )ds(x) .
+= (mv)iα − ∆t
+x̂ =  1  + ∆t
+n
+t
+∂x̂iα
+..
+∂Ω
+.
+
+
+
+
+(mv)n+1
+iα
+
+10
+
+(171)
+
+explicit time integration
+
+In this section we describe the easiest implementation of MPM with Symplectic Euler
+time integration. Most of the formulas in this section are derived in previous sessions.
+They are restated here to provide a more concise and practitioner friendly reference for
+implementing MPM. We first discuss some separate modules and then state the full MPM
+algorithm.
+
+10.1 APIC Transfers
+The Affine Particle-In-Cell (APIC) method [Jiang et al., 2015] is recommended for particlegrid transfers due to its nice numerical properties. We ignore the time superscripts here
+for notation simplicity.
+The transfer from particles to grid is
+X
+mi =
+wip mp ,
+
+(172)
+
+p
+
+mi vi =
+
+X
+
+wip mp (vp + Bp (Dp )−1 (xi − xp )),
+
+(173)
+
+p
+
+where Bp is a matrix quantity stored at each particle (just like mass, position and velocity),
+Dp is given by
+X
+Dp =
+wip (xi − xp )(xi − xp )T
+(174)
+i
+
+41
+
+explicit time integration
+and is derived by preserving affine motion during the transfers. The corresponding
+transfer from the grid back to particles is
+X
+wip vi ,
+(175)
+vp =
+i
+
+Bp =
+
+X
+
+wip vi (xi − xp )T .
+
+(176)
+
+i
+
+Conveniently, Dp takes on a surprisingly simple form in the case of the quadratic (Dp =
+1
+1
+2
+2
+4 ∆x I) and cubic (Dp = 3 ∆x I) interpolation stencils commonly used for MPM. Note
+that for these interpolating stencils, multiplying by (Dp )−1 amounts to a constant scaling
+factor.
+If (though not recommended) linear spline is used for the interpolation function, to prevent singular Dp , an alternative formulation of APIC particle to grid is given as
+X
+mi =
+wip mp ,
+(177)
+p
+
+mi vi =
+
+X
+
+wip mp (vp + Cp (xi − xp )),
+
+(178)
+
+p
+
+and the grid to particle transfer is
+vp =
+
+X
+
+wip vi ,
+
+(179)
+
+i
+
+Cp =
+
+X
+
+
+vi
+
+i
+
+∂Ni
+(xp )
+∂x
+
+T
+.
+
+(180)
+
+Note that in this case, Cp is just the Eulerian velocity gradient evaluated at xp , which we
+have already computed for evolving Fp .
+
+10.2 Deformation Gradient Update
+In the beginning of each time step, the grid node locations are always on a undeformed
+regular grid. Let’s call them xni . The sup-script n is not necessary if we use the same
+grid all the time but we’ll keep it here for notation convention. The deformation gradient
+of each particle can be updated following the motion of the grid. If we assume a grid
+velocity field vn+1
+, it can be shown that the update rule for F is
+i
+!
+X
+Fn+1
+= I + ∆t
+vn+1
+(∇wnip )T Fnp .
+(181)
+p
+i
+i
+
+42
+
+explicit time integration
+10.3 State Update
+Symplectic Euler time integration on the grid implies
+xn+1
+= xni + ∆tvn+1
+,
+i
+i
+
+(182)
+
+vn+1
+= vni + ∆tfi (xni )/mi .
+i
+
+(183)
+
+One way of thinking about the grid motion is
+x = x(v),
+
+(184)
+
+i.e. the grid node positions are simply a function of grid node velocities via Equation 182.
+Therefore
+fni = fi (xni ) = fi (x(0)),
+
+(185)
+
+i.e., the explicit force is simply the force assuming zero grid motion. Using Equation 182,
+we can rewrite Equation 181 as
+!
+X
+Fp (x) = I +
+(xi − xni )(∇wnip )T Fnp ,
+(186)
+i
+
+so that Fp is a function of grid node locations x.
+
+10.4 Forces
+MPM Forces are defined on grid nodes. As we’ve seen earlier, for hyperelastic solids, the
+force can be derived either from the weak form of momentum equation or as the gradient
+of total potential energy. The later is simpler and often used as long as there is a well
+defined potential energy. Here we focus on hyperelastic solids.
+As mentioned before, we assume a deformation gradient based hyperelastic energy density. The total elastic potential energy is then
+X
+e=
+Vp0 Ψp (Fp ),
+(187)
+p
+
+where Vp0 is the material space volume of particle p.
+Nodal elastic force is the negative gradient of the total potential energy evaluated at
+nodal positions. Using Equation 186, the MPM spatial discretization of the stress-based
+forces is given as
+
+X  ∂Ψp
+∂e
+0
+(x) = −
+Vp
+(Fp (x)) (Fnp )T ∇wnip .
+(188)
+fi (x) = −
+∂xi
+∂F
+p
+
+43
+
+explicit time integration
+This is the force acting on grid node i resulting from elastic stresses of its nearby particles.
+In the case of Symplectic Euler, the force is easily written as
+
+X  ∂Ψp
+n
+n
+0
+n
+fi = fi (xi ) = −
+Vp
+(Fp ) (Fnp )T ∇wnip ,
+(189)
+∂F
+p
+which fully depends on the existing particle/grid weights and particle attributes. Alternatively if we don’t have the energy density, the force can also be written using the
+Cauchy stress,
+X
+fni = fi (xni ) = −
+Vpn σnp ∇wnip ,
+(190)
+p
+
+this comes from the weak form.
+
+10.5 MPM Scheme: Full Algorithm
+Here we outline the full update scheme for Symplectic Euler MPM. The particles are
+assumed to have already been initialized (i.e. each particle has a mass mp , volume
+Vp0 , initial position xp , initial velocity vp , affine matrix Bp and their material-related
+parameters (such as µ and λ in the case of Neo-Hookean).
+1. Particle to grid transfer (P2G). Using the APIC formula from Section 10.1, the first
+step is to transfer particle quantities to the grid. In particular, this step computes
+grid mass and momentum.
+2. Compute grid velocities. vi = mmi vi i . For nodes with mass equals to 0, mi and vi
+are manually reset to 0. One would traditionally think this requires a floating point
+threshold when implementing this step. However in practice directly comparing
+against 0.0f will not produce any unstable behavior or overflow. This is because
+even though you may get large forces on small mass nodes, the effect is scaled
+by the weight again when transferrring back to particles. In fact, hard coding a
+threshold will cause various problems such as drifting of total momentum.
+3. Identify grid degree of freedoms. This step is important for implementation efficiency. We label the grid nodes with nonzero masses to be the actually degree of
+freedoms. All other nodes will remain static and are not considered being part of
+the solver unknowns.
+4. Compute explicit grid forces fni using Equation 189.
+5. Grid velocity update using Equation 183. This step should take the boundary
+conditions or collision objects into account. In the case of explicit integration, each
+nodal velocity can be independently set to the desired value due to Dirichlet boundary conditions or rigid object collisions. See Section 12.1 for more details on how to
+deal with collision objects.
+
+44
+
+implicit time integration
+6. Update particle deformation gradient using Equation 181. Note that we never
+actually moved the grid or computed any new grid x. The motion is imaginary and
+only velocities are explicitly stored.
+7. Grid to particle transfer (G2P). This step computes new particle velocities vn+1
+p
+and affine matrices Bn+1
+with
+the
+scheme
+given
+in
+Section
+10.1.
+p
+8. Particle advection. Finally particles are advected with their new velocities: xn+1
+=
+p
+n
+n+1
+xp + ∆tvp . Note that this is only true when APIC is used. In a FLIP or FLIP-PICP n+1
+blending transfer scheme, xn+1
+=
+wip should be used instead (note that
+p
+i xi
+these two formulas are equivalent in the PIC or APIC case).
+
+11
+
+implicit time integration
+
+For implicit time integration, the main difference from explicit is the grid velocity update
+step in the MPM algorithm.
+
+11.1 Force Derivative
+Recall that the total elastic potential energy can be expressed in terms of the energy
+density Ψ as
+Z
+Ψ(F(X))dX,
+(191)
+Ω0
+
+where Ω0 is the undeformed configuration of the material. The MPM spatial discretization of the stress-based forces is equivalent to differentiation of a discrete approximation
+of this energy with respect to the Eulerian grid node material positions. However, we
+do not actually deform the Eulerian grid so we can think of the change in the grid node
+locations as being determined by the grid node velocities. That is, if xi is the position of
+grid node i, then x̂i = xi + ∆tvi would be the deformed location of that grid node given
+the current velocity vi of the node. If we refer to the vector of all grid nodes x̂i as x̂, then
+the MPM approximation to the total elastic potential can be written as
+X
+e(x̂) =
+Vp0 Ψ(F̂p (x̂)),
+(192)
+p
+
+where Vp0 is the volume of material originally occupied by particle p, and F̂Ep is related
+to x̂ as
+!
+X
+F̂p (x̂) = I +
+(x̂i − xi )(∇wnip )T Fnp .
+(193)
+i
+
+45
+
+implicit time integration
+With this convention, the MPM spatial discretization of the stress-based forces is given
+as
+X ∂Ψ
+∂e
+−fi (x̂) =
+(x̂) =
+Vp0
+(F̂p (x̂))(Fnp )T ∇wnip .
+(194)
+∂x̂i
+∂F
+p
+That is, fi (x̂) is the force on grid node i resulting from elastic stresses. This can also be
+written in terms of the Cauchy stress
+σp = J1n ∂Ψ
+(F̂p (x̂))(Fnp )T as
+p ∂F
+X
+fi (x̂) = −
+Vpn σp ∇wnip ,
+(195)
+p
+
+where Vpn = Jnp Vp0 is the volume of the material occupied by particle p at time tn .
+We highlight this relation of the MPM spatial discretization to the elastic potential because we would like to evolve our grid velocities vi implicitly in time. With this convention, we can take an implicit step on the elastic part of the update by utilizing the Hessian
+of the potential with respect to x̂. The action of this Hessian on an arbitrary increment
+δu can be expressed as
+−δfi =
+
+X ∂2 e
+X
+(x̂)δuj =
+Vp0 Ap (Fnp )T ∇wnip ,
+∂x̂i ∂x̂j
+p
+
+(196)
+
+j
+
+where
+Ap =
+
+∂2 Ψ
+∂F∂F
+
+
+(Fˆp (x̂)) : 
+
+X
+
+
+δuj (∇wnjp )T Fnp 
+
+(197)
+
+j
+
+and the notation A = C : D is taken to mean Aij = Cijkl Dkl with summation implied on
+indices kl.
+We can also derive this with the index notation. Recall the force is already written as
+a function of x in Equation 188, differentiating with implicitly summed index notations
+gives
+∂e
+∂fiα X 0 ∂2 Ψ
+=−
+=
+Vp
+(∇wnjp )ω (∇wnip )γ (Fnp )ωσ (Fnp )γβ ,
+∂xiα ∂xjτ
+∂xjτ
+∂Fαβ ∂Fτσ
+p
+where
+
+∂2 Ψ
+∂F2
+
+(198)
+
+can be derived from Ψ(F).
+
+11.2 Backward Euler System
+Backward Euler time integration replaces vn+1
+= vni + ∆tfi (xni )/mi (Equation 183) with
+i
+vn+1
+= vni + ∆tfi (xn+1
+)/mi ,
+i
+i
+
+(199)
+
+46
+
+implicit time integration
+i.e. the force is implicitly dependent on grid motion. This allows for larger time steps
+and more stable behaviors.
+Rearranging the equations of motion reveals a nonlinear system of equations of grid node
+velocities:
+h(vn+1 ) = Mvn+1 − ∆tf(xn + ∆tvn+1 ) − Mvn = 0.
+
+(200)
+
+11.3 Newton’s Method
+Solving Equation 200 can be done with a traditional Newton-Raphson solver. One starts
+with an initial guess v(0) , such as zero or the previous velocity vn . Then the solution is
+iteratively improved with
+(i+1)
+
+v
+
+(i)
+
+=v
+
+
+−
+
+∂h (i)
+(v )
+∂v
+
+−1
+
+h(v(i) ),
+
+(201)
+
+where each step the linear system is solved with a Krylov solver such as MINRES. Note
+that in each Newton iteration, Fp needs to be updated according to the velocity, an old
+state Fnp needs to be stored for each new Fp evaluation as well as the final Fp update after
+the Newton solve.
+In many cases only one iteration of Newton step is taken to already allow time steps
+orders of magnitude higher than explicit methods. This is almost equivalent to the so
+called semi-implicit MPM integration.
+
+11.4 Linearized Force
+We think of the elasto-plastic response as defined from the material positions of the
+Eulerian grid nodes x̂i = xi + ∆tvi . However, as noted before, we never deform this
+grid. Therefore, we can think of x̂ = x̂(v) as defined by v. With this in mind, we use the
+2 n
+∂fn
+following notation fni = fi (x̂(0)), fn+1
+= fi (x̂(vn+1 )) and ∂∂x̂ie∂x̂j = − ∂x̂ij = − ∂∂fx̂ij (x̂(0)).
+i
+Using these derivatives, we form our implicit update using vn+1
+= vni + ∆tm−1
+i
+i ((1 −
+n
+P
+∂fi n+1
+n+1
+−1 n
+n
+n
+β)fi + βfi ) ≈ vi + ∆tmi (fi + β∆t j ∂x̂j vj ). This leads to a (mass) symmetric
+system to solve for vn+1
+i
+
+2 n
+X
+2 −1 ∂ e
+Iδij + β∆t mi
+vn+1 = v?i ,
+∂x̂i ∂x̂j j
+
+(202)
+
+j
+
+where the right hand side is
+n
+v?i = vni + ∆tm−1
+i fi
+
+(203)
+
+47
+
+implicit time integration
+Particle Domain (Lagrangian)
+2
+
+only once
+
+7
+
+Particle
+states
+
+Updated deformation
+gradients
+
+Particle
+volumes
+
+9
+1
+
+3
+
+Grid velocities
+and mass
+
+5
+
+4
+
+Grid forces
+
+Grid velocities
+(RHS)
+
+Grid View (Eulerian)
+
+8
+
+9
+
+Particle velocities
+
+Collided particles
+
+10
+
+Updated positions
+
+6
+
+Collided
+grid velocities
+
+Implicitly
+solved
+velocities
+
+Material Point
+Method Overview
+
+Figure 4: An overview of the implicit time integration MPM scheme.
+
+and β chooses between explicit (β = 0), trapezoidal (β = 12 ), and backward Euler (β = 1).
+It can be shown this scheme is equivalent to taking one step of Newton’s method with
+a zero velocity initial guess. It requires solving one linear system in each time step. An
+overview of the semi-implicit time integration MPM scheme is shown in Figure 4.
+
+11.5 Optimization based Integrator
+The traditional Newton-Raphson solver leads to a significant time step improvement
+over more standard explicit treatments, but still requires a small time step in practice to
+remain stable.
+In fact, when the forces are derived from a potential energy function (which is true for
+most cases), it is possible to let Newton’s method converge reliably under arbitrary ∆t on
+the order of CFL condition by recasting the equation solving problem as an optimization
+problem, for which robust and efficient methods exist.
+We will show that solving
+h(vn+1 ) = Mvn+1 − ∆tf(xn + ∆tvn+1 ) − Mvn = 0
+
+(204)
+
+is equivalent to minimizing the following objective function:
+E(vi ) =
+
+X1
+i
+
+2
+
+mi kvi − vni k2 + e(xni + ∆tvi ).
+
+(205)
+
+Using this formulating, it is possible to take significantly larger time steps, providing
+a significant computational savings with minimal modification to the original approach.
+We refer to [Gast et al., 2015] for more details on implementing this integrator.
+
+48
+
+more topics
+
+12
+
+more topics
+
+12.1 Collision Objects
+We process collisions against collision on the grid velocity vi immediately after forces
+are applied to grid velocities. In the case of semi-implicit integration, this contributes to
+the right hand side of the linear system, and degrees of freedom corresponding to the
+colliding grid nodes are projected out during the solve. The collision treatments can be
+applied once more to particle velocities vn+1
+just before updating positions to account for
+p
+the minor discrepancies between particle and grid velocities due to interpolation. In each
+case, collision processing is performed the same way. All of our collisions are inelastic.
+Note that the particle based collision will introduce inconsistency in the deformation
+gradients on particles. It may produce artifacts for certain simulations and should only
+be turned on if necessary.
+Collision objects are represented as level sets, which makes collision detection (φ 6
+0) trivial. In case of a collision the local normal n = ∇φ and object velocity vco are
+computed. First, the particle/grid velocity v is transformed into the reference frame of
+the collision object, vrel = v − vco . If the bodies are separating (vn = vrel · n > 0), then no
+collision is applied. Let vt = vrel − nvn be the tangential portion of the relative velocity.
+0
+If a sticking impulse is required (kvt k 6 −µvn ), then we simply let vrel
+= 0, where
+the prime indicates that the collision has been applied. Otherwise, we apply dynamic
+0
+friction, and vrel
+= vt + µvn vt /kvt k, where µ is the coefficient of friction. Finally, we
+0 +v .
+transform the collided relative velocity back into world coordinates with v 0 = vrel
+co
+We used two types of collision objects: rigid and deforming. In the rigid case, we store
+a stationary level set and a potentially time-varying rigid transform, which we can use
+to compute φ, n, and vco at any point. In the deforming case, we load level set key
+frames and interpolate them using φ(x, t + γ∆t) = (1 − γ)φ(x − γ∆tvco , t) + γφ(x + (1 −
+γ)∆tvco , t + ∆t), except we compute the velocity as vco = (1 − γ)v(x, t) + γv(x, t + ∆t)
+instead of the average velocity.
+Finally, we utilize a sort of sticky collision in situations where we want the material to
+stick to vertical or under-hanging surfaces. In this case, Coulomb friction is insufficient
+since the normal relative velocity would be zero (vertical) or positive (under-hanging
+0
+and separating due to gravity). We achieve this effect by setting vrel
+= 0 unconditionally for collisions against these surfaces. Dirichlet boundary condition on grid nodes is
+equivalent to sticky collision.
+
+49
+
+more topics
+12.2 Lagrangian Forces
+In a traditional MPM simulation, forces are computed using we compute forces as in
+Equation 188. Letting each particle to store a deformation gradient has the advantages
+of a mesh-free method, such as effortless topology change. When MPM is used for simulating traditional rubber-like elastic solids, it makes more sense to have the connectivity
+information as in mesh-based FEM solvers because a mesh can provide more accurate
+deformation gradient computations and easier rendering. Here we show that for objects
+that are not intended to undergo topology change, a meshed approach is also available
+and can be easily integrated into the MPM framework.
+In this case, we can use any Lagrangian force model (springs, finite elements, etc.) for
+which we can write down total potential energy W(xp ). Corresponding to this La∂W
+grangian force model, we compute forces fp = − ∂x
+. We also assume that given any vecp
+P ∂f
+∂f
+tor δuq on particles we can multiply by force derivatives ∂xpq to obtain δfp = q ∂xpq δuq .
+Since these force-related constructs are purely Lagrangian and are computed in the usual
+way, we will not elaborate on them here.
+Although we have defined our mesh-based forces as Lagrangian forces, we must still
+apply them through the grid. We must describe how particle positions xp relate to our
+(conceptually) moving grid nodes xi so that forces can be evaluated. Then, we must
+compute fi from fp and find a means of computing δfi given δui . Doing this allows us
+to use Lagrangian forces as Eulerian forces. Comparing our update rules for xp and xi
+P
+we find xp = i wnip xi . Using the chain rule,
+fi =
+
+X
+p
+
+wnip fp
+
+δfi =
+
+X
+p,q,j
+
+wnip
+
+∂fp n
+w δuj .
+∂xq jq
+
+(206)
+
+Although this formula is written with three nested summations, the computation can
+be done efficiently by computing the summations consecutively. Since these forces are
+applied to the grid, both the MPM and Lagrangian approaches can be employed in the
+same simulation. Each particle is labeled as an MPM particle or a meshed particle. Note
+that the deformation gradient Fnp stored on meshed particles is never used, since for those
+particles this quantity is computed using the mesh. This provides an effective means of
+coupling MPM with mesh-based approaches. This gives the precise surface tracking of
+Lagrangian techniques coupled with the automatic collision handling of Eulerian grids.
+
+50
+
+references
+
+references
+Ando, R. and Tsuruno, R. (2011). A particle-based method for preserving fluid sheets. In
+Proc ACM SIGGRAPH/Eurograph Symp Comp Anim, SCA ’11, pages 7–16.
+Bonet, J. and Wood, R. (2008). Nonlinear continuum mechanics for finite element analysis.
+Cambridge University Press.
+Bridson, R. (2008). Fluid simulation for computer graphics. Taylor & Francis.
+Daviet, G. and Bertails-Descoubes, F. (2016). A semi-implicit material point method for
+the continuum simulation of granular materials. ACM Trans Graph, 35(4).
+Gast, T., Fu, C., Jiang, C., and Teran, J. (2016). Implicit-shifted symmetric qr singular
+value decomposition of 3x3 matrices. Technical report, University of California Los
+Angeles.
+Gast, T., Schroeder, C., Stomakhin, A., Jiang, C., and Teran, J. (2015). Optimization
+integrator for large time steps. IEEE Trans Vis Comp Graph, 21(10):1103–1115.
+Gonzalez, O. and Stuart, A. (2008). A first course in continuum mechanics. Cambridge
+University Press.
+Hegemann, J., Jiang, C., Schroeder, C., and Teran, J. M. (2013). A level set method for
+ductile fracture. In Proc ACM SIGGRAPH/Eurograp Symp Comp Anim, pages 193–201.
+Irving, G., Teran, J., and Fedkiw, R. (2004). Invertible finite elements for robust simulation
+of large deformation. In Proc ACM SIGGRAPH/Eurograph Symp Comp Anim, pages 131–
+140.
+Jiang, C. (2015). The material point method for the physics-based simulation of solids and fluids.
+PhD thesis, University of California, Los Angeles.
+Jiang, C., Schroeder, C., Selle, A., Teran, J., and Stomakhin, A. (2015). The affine particlein-cell method. ACM Trans Graph, 34(4):51:1–51:10.
+Jiang, C., Schroeder, C., and Teran, J. (2016). An Angular Momentum Conserving AffineParticle-In-Cell Method. ArXiv e-prints.
+Klar, G., Gast, T., Pradhana, A., Fu, C., Schroeder, C., Jiang, C., and Teran, J. (2016).
+Drucker-prager elastoplasticity for sand animation. ACM Trans Graph, 35(4).
+McAdams, A., Selle, A., Tamstorf, R., Teran, J., and Sifakis, E. (2011). Computing the
+singular value decomposition of 3× 3 matrices with minimal branching and elementary
+floating point operations. Technical report, University of Wisconsin-Madison.
+
+51
+
+references
+Ram, D., Gast, T., Jiang, C., Schroeder, C., Stomakhin, A., Teran, J., and Kavehpour, P.
+(2015). A material point method for viscoelastic fluids, foams and sponges. In Proc
+ACM SIGGRAPH/Eurograph Symp Comp Anim, pages 157–163.
+Schroeder, C. (2016). Practical notes on implementing derivatives. ArXiv e-prints.
+Steffen, M., Kirby, R. M., and Berzins, M. (2008). Analysis and reduction of quadrature
+errors in the material point method (MPM). Int J Numer Meth Eng, 76(6):922–948.
+Stomakhin, A., Howes, R., Schroeder, C., and Teran, J. (2012). Energetically consistent
+invertible elasticity. In Proc Symp Comp Anim, pages 25–32.
+Stomakhin, A., Schroeder, C., Chai, L., Teran, J., and Selle, A. (2013). A material point
+method for snow simulation. ACM Trans Graph, 32(4):102:1–102:10.
+Stomakhin, A., Schroeder, C., Jiang, C., Chai, L., Teran, J., and Selle, A. (2014). Augmented MPM for phase-change and varied materials. ACM Trans Graph, 33(4):138:1–
+138:11.
+Sulsky, D., Zhou, S., and Schreyer, H. (1995). Application of a particle-in-cell method to
+solid mechanics. Comp Phys Comm, 87(1):236–252.
+Yue, Y., Smith, B., Batty, C., Zheng, C., and Grinspun, E. (2015). Continuum foam: a material point method for shear-dependent flows. ACM Trans Graph, 34(5):160:1–160:20.
+Zhu, Y. and Bridson, R. (2005). Animating sand as a fluid. ACM Trans Graph, 24(3):965–
+972.
+
+52
+
+
