@@ -39,35 +39,12 @@ grid_v = ti.Vector.field(2, dtype=float, shape=(n_grid, n_grid))  # grid node mo
 grid_m = ti.field(dtype=float, shape=(n_grid, n_grid))  # grid node mass
 
 @ti.func
-def n(x_val: float):
-    result = 0.0
-    abs_x_val = ti.abs(x_val)
-    if abs_x_val < 0.5:
-        result = 0.75 - abs_x_val**2
-    elif abs_x_val < 1.5:  # 0.5 <= abs_x_val < 1.5
-        result = 0.5 * (1.5 - abs_x_val)**2
-    else:
-        result = 0.0
-    return result
+def n(x):
+    pass
 
 @ti.func
-def quad_weights(fx_vec):
-    # Calculate weights for each component of fx_vec
-    # w_list[0] corresponds to N(fx)
-    # w_list[1] corresponds to N(fx - 1.0)
-    # w_list[2] corresponds to N(fx - 2.0)
-    
-    w0_x = n(fx_vec[0])
-    w0_y = n(fx_vec[1])
-    
-    w1_x = n(fx_vec[0] - 1.0)
-    w1_y = n(fx_vec[1] - 1.0)
-    
-    w2_x = n(fx_vec[0] - 2.0)
-    w2_y = n(fx_vec[1] - 2.0)
-    
-    # Construct list of ti.Vector instances
-    return [ti.Vector([w0_x, w0_y]), ti.Vector([w1_x, w1_y]), ti.Vector([w2_x, w2_y])]
+def quad_weights(fx):
+    pass
 
 @ti.kernel
 def substep():
@@ -78,8 +55,7 @@ def substep():
         base = (x[p] * inv_dx - 0.5).cast(int)
         fx = x[p] * inv_dx - base.cast(float)
         # Quadratic kernels  [http://mpm.graphics   Eqn. 123, with x=fx, fx-1,fx-2]
-        # w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
-        w = quad_weights(fx)
+        w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
         # F[p]: deformation gradient update
         F[p] = (ti.Matrix.identity(float, 2) + dt * C[p]) @ F[p]
         # h: Hardening coefficient: snow gets harder when compressed
@@ -134,8 +110,7 @@ def substep():
     for p in x:  # grid to particle (G2P)
         base = (x[p] * inv_dx - 0.5).cast(int)
         fx = x[p] * inv_dx - base.cast(float)
-        # w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1.0) ** 2, 0.5 * (fx - 0.5) ** 2]
-        w = quad_weights(fx)
+        w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1.0) ** 2, 0.5 * (fx - 0.5) ** 2]
         new_v = ti.Vector.zero(float, 2)
         new_C = ti.Matrix.zero(float, 2, 2)
         for i, j in ti.static(ti.ndrange(3, 3)):
